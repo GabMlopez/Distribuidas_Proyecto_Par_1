@@ -5,11 +5,13 @@ import (
 	"chat_distribuido/controladores/sockets"
 	"chat_distribuido/db"
 	"chat_distribuido/middleware"
+	"context"
 	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func main() {
@@ -19,6 +21,12 @@ func main() {
 	}
 
 	db.ConnectDB()
+	db.ConnectRedis()
+	defer db.DisconnectDB()
+
+	// Limpiar usuarios fantasma de sesiones anteriores (útil en desarrollo)
+	collection := db.GetCollection("usuarios")
+	collection.UpdateMany(context.Background(), bson.M{}, bson.M{"$set": bson.M{"activo": false}})
 
 	// Crear hub central de WebSocket
 	hub := sockets.Nuevo_Hub()
@@ -70,14 +78,9 @@ func main() {
 		adminRoutes.GET("/rooms", controladores.GetAllSalasAdmin)
 	}
 
-	roomRoutesClosed := r.Group("/rooms")
-	roomRoutesClosed.Use(middleware.AuthMiddlewareUser())
-	{
-		roomRoutesClosed.GET("/list", controladores.ListaSalas)
-	}
-
 	roomRoutes := r.Group("/rooms")
 	{
+		roomRoutes.GET("/list", controladores.ListaSalas)
 		roomRoutes.POST("/join", controladores.UnirseSalaHandler)
 		roomRoutes.POST("/leave", controladores.DejarSalaHandler)
 	}

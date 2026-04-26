@@ -1,12 +1,14 @@
 package controladores
 
 import (
+	"chat_distribuido/controladores/sockets"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -78,10 +80,24 @@ func UploadFileHandler(c *gin.Context) {
 		return
 	}
 
+	fileURL := fmt.Sprintf("/upload/file/%s", filename)
+
+	// Emitir evento por WebSocket si el hub está disponible
+	if hub != nil {
+		hub.Broadcast <- sockets.Mensaje{
+			Tipo:      "multimedia",
+			Nickname:  "Sistema",
+			Texto:     fmt.Sprintf("Nuevo archivo compartido: %s", header.Filename),
+			SalaID:    salaID,
+			FileURL:   fileURL,
+			Timestamp: time.Now().Unix(),
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":  "Archivo subido exitosamente",
 		"filename": filename,
-		"url":      fmt.Sprintf("/upload/file/%s", filename),
+		"url":      fileURL,
 	})
 }
 

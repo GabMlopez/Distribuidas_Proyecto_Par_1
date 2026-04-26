@@ -46,6 +46,9 @@ func (c *Cliente) ReadPump() {
 			break
 		}
 
+		if message.Tipo == "" {
+			message.Tipo = "chat"
+		}
 		message.Nickname = c.Nickname
 		message.SalaID = c.SalaId
 		message.Timestamp = time.Now().Unix()

@@ -1,2 +1,30 @@
+# Environment files
 .env
-modulos_ayuda
+
+# Binary/executable files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+Distribuidas_Proyecto_Par_1
+
+# Go build artifacts
+bin/
+pkg/
+
+# Dependencies
+vendor/
+
+# Uploads and temporary data
+uploads/
+/mongodb_data/
+
+# IDEs and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

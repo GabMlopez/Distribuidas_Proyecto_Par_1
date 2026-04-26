@@ -5,12 +5,14 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 )
 
 var jwtSecretAdmin []byte
 var jwtSecretUser []byte
 
 func init() {
+	godotenv.Load()
 	// Cargar secret key desde variable de entorno (UNA SOLA VEZ)
 	secretAdmin := os.Getenv("JWT_SECRET_ADMIN")
 	if secretAdmin == "" {

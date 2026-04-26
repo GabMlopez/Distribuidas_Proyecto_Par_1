@@ -1,9 +1,14 @@
 package sockets
 
 import (
+	"chat_distribuido/db"
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
+
+	"github.com/redis/go-redis/v9"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type Hub struct {
@@ -15,7 +20,9 @@ type Hub struct {
 
 	Broadcast chan Mensaje
 
-	mutex sync.RWMutex
+	mutex       sync.RWMutex
+	RedisClient *redis.Client
+	ctx         context.Context
 }
 
 func Nuevo_Hub() *Hub {
@@ -24,10 +31,15 @@ func Nuevo_Hub() *Hub {
 		Registro:    make(chan *Cliente),
 		Desregistro: make(chan *Cliente),
 		Broadcast:   make(chan Mensaje),
+		RedisClient: db.GetRedisClient(),
+		ctx:         context.Background(),
 	}
 }
 
 func (h *Hub) Run() {
+	// Goroutine para suscribirse a Redis
+	go h.listenRedis()
+
 	for {
 		select {
 		case client := <-h.Registro:
@@ -39,6 +51,15 @@ func (h *Hub) Run() {
 			h.mutex.Unlock()
 
 			h.notifyUserList(client.SalaId)
+			// Notificar que alguien se unió
+			go func(c *Cliente) {
+				h.Broadcast <- Mensaje{
+					Tipo:     "join",
+					Nickname: "Sistema",
+					Texto:    c.Nickname + " se ha unido a la sala",
+					SalaID:   c.SalaId,
+				}
+			}(client)
 			log.Printf("Cliente %s conectado a sala %s", client.Nickname, client.SalaId)
 
 		case client := <-h.Desregistro:
@@ -58,52 +79,90 @@ func (h *Hub) Run() {
 
 			// Notificar usuarios actualizados
 			h.notifyUserList(client.SalaId)
+			// Notificar que alguien salió
+			go func(c *Cliente) {
+				h.Broadcast <- Mensaje{
+					Tipo:     "leave",
+					Nickname: "Sistema",
+					Texto:    c.Nickname + " ha salido de la sala",
+					SalaID:   c.SalaId,
+				}
+			}(client)
 			log.Printf("Cliente %s desconectado de sala %s", client.Nickname, client.SalaId)
 
 		case message := <-h.Broadcast:
-			h.mutex.RLock()
-			if clients, ok := h.Salas[message.SalaID]; ok {
-				// Enviar mensaje a todos los clientes en la sala usando goroutines
-				for client := range clients {
-					select {
-					case client.Envio <- message:
-					default:
-						close(client.Envio)
-						delete(clients, client)
-					}
-				}
-			}
-			h.mutex.RUnlock()
+			// Publicar en Redis. La distribución local ocurrirá en listenRedis
+			h.publishToRedis(message)
 		}
 	}
 }
 
-func (h *Hub) notifyUserList(roomID string) {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
+func (h *Hub) publishToRedis(msg Mensaje) {
+	if h.RedisClient == nil {
+		return
+	}
+	payload, _ := json.Marshal(msg)
+	h.RedisClient.Publish(h.ctx, "chat_messages", payload)
+}
 
-	if clients, ok := h.Salas[roomID]; ok {
-		users := make([]string, 0, len(clients))
-		for client := range clients {
-			users = append(users, client.Nickname)
+func (h *Hub) listenRedis() {
+	if h.RedisClient == nil {
+		return
+	}
+	pubsub := h.RedisClient.Subscribe(h.ctx, "chat_messages")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+	for msg := range ch {
+		var message Mensaje
+		if err := json.Unmarshal([]byte(msg.Payload), &message); err != nil {
+			log.Printf("Error deserializando mensaje de Redis: %v", err)
+			continue
 		}
 
-		userListJSON, _ := json.Marshal(map[string]interface{}{
-			"type":  "user_list",
-			"users": users,
-		})
-
-		for client := range clients {
-			select {
-			case client.Envio <- Mensaje{
-				Tipo:   "user_list",
-				Texto:  string(userListJSON),
-				SalaID: roomID,
-			}:
-			default:
+		h.mutex.RLock()
+		if clients, ok := h.Salas[message.SalaID]; ok {
+			for client := range clients {
+				select {
+				case client.Envio <- message:
+				default:
+				}
 			}
 		}
+		h.mutex.RUnlock()
 	}
+}
+
+func (h *Hub) notifyUserList(roomID string) {
+	// Obtener lista global de usuarios de MongoDB
+	collection := db.GetCollection("usuarios")
+	cursor, err := collection.Find(h.ctx, bson.M{"sala_id": roomID, "activo": true})
+	if err != nil {
+		log.Printf("Error obteniendo usuarios de sala %s: %v", roomID, err)
+		return
+	}
+	defer cursor.Close(h.ctx)
+
+	var users []string
+	for cursor.Next(h.ctx) {
+		var u struct {
+			Nickname string `bson:"nickname"`
+		}
+		if err := cursor.Decode(&u); err == nil {
+			users = append(users, u.Nickname)
+		}
+	}
+
+	userListJSON, _ := json.Marshal(map[string]interface{}{
+		"type":  "user_list",
+		"users": users,
+	})
+
+	h.publishToRedis(Mensaje{
+		Tipo:   "user_list",
+		Texto:  string(userListJSON),
+		SalaID: roomID,
+	})
 }
 
 func (h *Hub) GetRoomUsers(roomID string) []string {
