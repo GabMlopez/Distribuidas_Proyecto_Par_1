@@ -5,92 +5,48 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/joho/godotenv"
 )
 
-var jwtSecretAdmin []byte
-var jwtSecretUser []byte
+var jwtSecret []byte
 
 func init() {
-	godotenv.Load()
-	// Cargar secret key desde variable de entorno (UNA SOLA VEZ)
-	secretAdmin := os.Getenv("JWT_SECRET_ADMIN")
-	if secretAdmin == "" {
-		println("Secret not found admin")
-		return
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "tu-clave-secreta-por-defecto-cambiar-en-produccion"
 	}
-	jwtSecretAdmin = []byte(secretAdmin)
-
-	secretUser := os.Getenv("JWT_SECRET_USER")
-	if secretUser == "" {
-		println("Secret not found user")
-		return
-	}
-	jwtSecretUser = []byte(secretUser)
-	jwtSecretAdmin = []byte(secretAdmin)
+	jwtSecret = []byte(secret)
 }
 
-func GetJWTSecretUser() []byte {
-	return jwtSecretUser
-}
-
-// GetJWTSecret retorna la clave secreta JWT
-func GetJWTSecretAdmin() []byte {
-	return jwtSecretAdmin
-}
-
-// GenerarToken crea un nuevo token JWT
+// GenerarTokenAdmin crea token para administrador
 func GenerarTokenAdmin(adminID, usuario string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"admin_id": adminID,
 		"usuario":  usuario,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(), // 24 horas
+		"tipo":     "admin",
+		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 		"iat":      time.Now().Unix(),
 	})
-
-	return token.SignedString(jwtSecretAdmin)
+	return token.SignedString(jwtSecret)
 }
 
-// VerificarToken valida y parsea un token JWT
-func VerificarTokenAdmin(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Verificar método de firma
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, jwt.ErrSignatureInvalid
-		}
-		return jwtSecretAdmin, nil
-	})
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		return token, claims, nil
-	}
-
-	return nil, nil, jwt.ErrTokenInvalidClaims
-}
-
-// GenerarToken crea un nuevo token JWT
-func GenerarTokenUser(usuario string) (string, error) {
+// GenerarTokenUser crea token para usuario normal
+func GenerarTokenUser(usuarioID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"usuario": usuario,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
-		"iat":     time.Now().Unix(),
+		"usuario_id": usuarioID,
+		"tipo":       "user",
+		"exp":        time.Now().Add(time.Hour * 24).Unix(),
+		"iat":        time.Now().Unix(),
 	})
-
-	return token.SignedString(jwtSecretUser)
+	return token.SignedString(jwtSecret)
 }
 
-// VerificarToken valida y parsea un token JWT
-func VerificarTokenUser(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
+// VerificarToken valida cualquier token
+func VerificarToken(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Verificar método de firma
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
 		}
-		return jwtSecretUser, nil
+		return jwtSecret, nil
 	})
 
 	if err != nil {

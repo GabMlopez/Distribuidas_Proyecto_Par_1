@@ -45,6 +45,7 @@ type RoomResponse struct {
 	SalaID   string `json:"sala_id"`
 	Tipo     string `json:"tipo"`
 	Usuarios int    `json:"usuarios"`
+	Nombre   string `json:"nombre,omitempty"`
 }
 
 func validarSalaYPin(ctx *gin.Context, salaID, pin string) (*modelos.Sala, error) {
@@ -450,6 +451,7 @@ func ListaSalas(c *gin.Context) {
 			SalaID:   sala.SalaID,
 			Tipo:     sala.Tipo,
 			Usuarios: hub.GetRoomUserCount(sala.SalaID),
+			Nombre:   sala.Nombre,
 		})
 	}
 

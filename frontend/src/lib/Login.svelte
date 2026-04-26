@@ -22,7 +22,7 @@
         });
         const data = await res.json();
         if (res.ok) {
-          dispatch('login', { token: data.token, nickname: 'Admin' });
+          dispatch('login', { token: data.token, nickname: 'Admin', usuarioId: data.usuario_id, isAdmin: true});
         } else {
           error = data.error || 'Credenciales incorrectas';
         }
@@ -33,7 +33,13 @@
       if (!nickname.trim()) {
         error = 'El nickname es requerido';
       } else {
-        dispatch('login', { token: null, nickname: nickname.trim() });
+       const tempUserId = 'user_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+        dispatch('login', { 
+          token: null, 
+          nickname: nickname.trim(), 
+          usuarioId: tempUserId,
+          isAdmin: false
+        });
       }
     }
     loading = false;

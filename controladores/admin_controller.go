@@ -18,6 +18,7 @@ import (
 type UpdateSalaRequest struct {
 	Pin         *string `json:"pin,omitempty"`
 	Tipo        *string `json:"tipo,omitempty"` // "texto" o "multimedia"
+	Nombre      *string `json:"nombre,omitempty"`
 	MaxFileSize *int64  `json:"max_file_size,omitempty"`
 }
 
@@ -51,6 +52,7 @@ func CreateSalasHandler(c *gin.Context) {
 		Pin:         req.Pin,
 		Tipo:        req.Tipo,
 		MaxFileSize: maxFileSize,
+		Nombre:      req.Nombre,
 	}
 
 	// Guardar en MongoDB
@@ -63,6 +65,7 @@ func CreateSalasHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"sala_id":       salaID,
+		"nombre":        req.Nombre,
 		"pin":           req.Pin,
 		"tipo":          req.Tipo,
 		"max_file_size": maxFileSize,
@@ -70,7 +73,7 @@ func CreateSalasHandler(c *gin.Context) {
 	})
 }
 
-// UpdateSalaHandler - Actualizar sala existente (requiere autenticación)
+// Actualizar sala existente
 func UpdateSalaHandler(c *gin.Context) {
 	// Verificar autenticación
 	adminID, exists := c.Get("admin_id")

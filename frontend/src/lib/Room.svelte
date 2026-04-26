@@ -4,7 +4,7 @@
 
   export let userContext;
   export let room;
-
+  let roomDisplayName = room.nombre || room.id;
   let ws;
   let messages = [];
   let currentMessage = '';
@@ -15,7 +15,7 @@
   let wsStatus = 'connecting'; // 'connecting' | 'open' | 'closed'
 
   onMount(() => connectWebSocket());
-  onDestroy(() => { if (ws) ws.close(); });
+  onDestroy(() => { leaveRoom(); if (ws) ws.close(); });
 
   async function scrollToBottom() {
     await tick();
@@ -75,12 +75,28 @@
   }
 
   async function leaveRoom() {
+    const usuarioId = room.usuarioId || userContext.usuarioId;
+    
+    if (!usuarioId) {
+      console.error('No usuario_id available to leave room');
+      return;
+    }
+    
     try {
-      await fetch('http://localhost:8080/rooms/leave', {
+      const response =await fetch('http://localhost:8080/rooms/leave', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sala_id: room.id, nickname: userContext.nickname, device_id: userContext.deviceId })
+        body: JSON.stringify({ 
+          usuario_id: usuarioId,
+          sala_id: room.id 
+        })
       });
+       if (!response.ok) {
+        const error = await response.json();
+        console.error('Error al salir:', error);
+      } else {
+        console.log('Successfully left room');
+      }
     } catch {}
     dispatch('leave');
   }
@@ -103,7 +119,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </div>
         <div>
-          <div class="room-name">{room.id}</div>
+          <div class="room-name">{roomDisplayName}</div>
           <span class="badge badge--{room.type}">{room.type}</span>
         </div>
       </div>
@@ -148,7 +164,7 @@
     <div class="chat-header">
       <div class="chat-title">
         <div class="room-dot dot-{room.type}"></div>
-        <span>Sala <strong>{room.id}</strong></span>
+        <span> <strong>{roomDisplayName}</strong></span>
       </div>
       <div class="chat-meta">{messages.length} mensajes</div>
     </div>

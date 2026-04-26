@@ -10,23 +10,22 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-var jwtSecret []byte
-
-type Login_req struct {
+type LoginRequest struct {
 	Usuario     string `json:"usuario" binding:"required"`
 	Contrasenia string `json:"contrasenia" binding:"required"`
 }
 
-type Login_res struct {
-	Token string `json:"token"`
+type LoginResponse struct {
+	Token     string `json:"token"`
+	UsuarioID string `json:"usuario_id"`
+	Nickname  string `json:"nickname"`
+	IsAdmin   bool   `json:"is_admin"`
 }
 
 func Login_handler(c *gin.Context) {
-	var req Login_req
+	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Datos inválidos: " + err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos: " + err.Error()})
 		return
 	}
 
@@ -36,34 +35,29 @@ func Login_handler(c *gin.Context) {
 	err := collection.FindOne(c.Request.Context(), bson.M{"usuario": req.Usuario}).Decode(&admin)
 
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Credenciales inválidas",
-		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciales inválidas"})
 		return
 	}
 
-	// Verificar contraseña usando la función del paquete utils
+	// Verificar contraseña
 	if err := utils.Check_contrasenia(req.Contrasenia, admin.Contrasenia); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Credenciales inválidas",
-		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciales inválidas"})
 		return
 	}
 
-	// Generar token usando la función unificada
+	// Generar token para admin
 	token, err := utils.GenerarTokenAdmin(admin.AdministradorID, admin.Usuario)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Error generando token",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generando token"})
 		return
 	}
 
-	c.JSON(http.StatusOK, Login_res{
-		Token: token,
-	})
-}
+	adminUsuarioID := "admin_" + admin.AdministradorID
 
-func Logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Sesión cerrada exitosamente"})
+	c.JSON(http.StatusOK, LoginResponse{
+		Token:     token,
+		UsuarioID: adminUsuarioID,
+		Nickname:  "Admin",
+		IsAdmin:   true,
+	})
 }

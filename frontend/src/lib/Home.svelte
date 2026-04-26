@@ -3,7 +3,7 @@
   const dispatch = createEventDispatcher();
 
   export let userContext;
-
+  console.log('Home user context:', userContext);
   let rooms = [];
   let loading = true;
   let error = '';
@@ -12,6 +12,7 @@
   let newRoomPin = '';
   let newRoomType = 'texto';
   let selectedRoomId = '';
+  let selectedRoomName = '';
   let joinPin = '';
   let joinError = '';
   let joining = false;
@@ -51,8 +52,13 @@
     creating = false;
   }
 
-  function openJoin(id) { selectedRoomId = id; joinPin = ''; joinError = ''; showJoinModal = true; }
-
+  function openJoin(room) {
+    selectedRoomId = room.sala_id;
+    selectedRoomName = room.nombre || room.sala_id; 
+    joinPin = ''; 
+    joinError = ''; 
+    showJoinModal = true;
+  }
   async function joinRoom() {
     joining = true; joinError = '';
     try {
@@ -64,7 +70,14 @@
       const data = await res.json();
       if (res.ok) {
         showJoinModal = false;
-        dispatch('join', { id: selectedRoomId, token: data.token, type: data.tipo || 'texto' });
+       dispatch('join', { 
+          id: selectedRoomId,
+          nombre: selectedRoomName,
+          token: data.token, 
+          type: data.tipo || 'texto',
+          usuario_id: data.usuario_id,  
+          nickname: data.nickname
+        });
       } else {
         joinError = data.error || 'PIN incorrecto';
       }
@@ -137,7 +150,7 @@
             <div class="room-top">
               <div class="room-id">
                 <div class="room-dot dot-{room.tipo}"></div>
-                <code>{room.sala_id}</code>
+                <code>{room.nombre}</code>
               </div>
               <span class="badge badge--{room.tipo}">{room.tipo}</span>
             </div>
@@ -156,7 +169,7 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 {room.usuarios ?? 0} conectado{room.usuarios !== 1 ? 's' : ''}
               </div>
-              <button class="btn-primary join-btn" on:click={() => openJoin(room.sala_id)}>
+              <button class="btn-primary join-btn" on:click={() => openJoin(room)}>
                 Unirse
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
@@ -212,7 +225,7 @@
       <div class="modal-head">
         <div>
           <h3>Unirse a la sala</h3>
-          <code class="room-id-modal">{selectedRoomId}</code>
+          <code class="room-id-modal">{selectedRoomName}</code>
         </div>
         <button class="btn-ghost icon-btn" on:click={() => showJoinModal = false}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>

@@ -18,7 +18,13 @@
   }
 
   function handleJoinRoom(event) {
-    currentRoom = event.detail;
+    currentRoom = {
+      id: event.detail.id,
+      nombre: event.detail.nombre,
+      type: event.detail.type,
+      token: event.detail.token,
+      usuarioId: event.detail.usuario_id 
+    };
     currentView = 'room';
   }
 
