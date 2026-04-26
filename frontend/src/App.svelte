@@ -32,6 +32,12 @@
     currentRoom = null;
     currentView = 'home';
   }
+
+  function handleLogout() {
+    userContext = { token: null, nickname: '', deviceId: 'dev_' + Math.random().toString(36).substr(2, 9) };
+    currentRoom = null;
+    currentView = 'login';
+  }
 </script>
 
 <!-- Room usa toda la pantalla, Login y Home van centrados -->
@@ -42,7 +48,7 @@
     {#if currentView === 'login'}
       <Login on:login={handleLogin} />
     {:else if currentView === 'home'}
-      <Home {userContext} on:join={handleJoinRoom} />
+      <Home {userContext} on:join={handleJoinRoom} on:logout={handleLogout} />
     {/if}
   </div>
 {/if}

@@ -4,18 +4,42 @@
 
   export let userContext;
   export let room;
+
   let roomDisplayName = room.nombre || room.id;
+  const API = 'http://localhost:8080';
+
   let ws;
   let messages = [];
   let currentMessage = '';
   let users = [];
   let fileInput;
-  let uploading = false;
   let chatBody;
-  let wsStatus = 'connecting'; // 'connecting' | 'open' | 'closed'
+  let wsStatus = 'connecting';
 
-  onMount(() => connectWebSocket());
-  onDestroy(() => { leaveRoom(); if (ws) ws.close(); });
+  // Subida paralela: lista de uploads activos
+  let uploads = []; // [{ name, progress, done, error }]
+
+  onMount(() => {
+    connectWebSocket();
+    // Desconexión automática al cerrar la pestaña/navegador
+    window.addEventListener('beforeunload', handleBeforeUnload);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+    if (ws) ws.close();
+  });
+
+  function handleBeforeUnload() {
+    // sendBeacon garantiza que la petición se complete aunque la página se cierre
+    const payload = JSON.stringify({
+      sala_id: room.id,
+      nickname: userContext.nickname,
+      device_id: userContext.deviceId
+    });
+    navigator.sendBeacon(`${API}/rooms/leave`, new Blob([payload], { type: 'application/json' }));
+    if (ws) ws.close();
+  }
 
   async function scrollToBottom() {
     await tick();
@@ -56,48 +80,79 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }
 
-  async function uploadFile() {
+  // Subida paralela de múltiples archivos
+  async function handleFilesSelected() {
     if (!fileInput?.files?.length) return;
-    uploading = true;
-    const formData = new FormData();
-    formData.append('sala_id', room.id);
-    formData.append('file', fileInput.files[0]);
-    try {
-      const res = await fetch('http://localhost:8080/upload/file', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${room.token}` },
-        body: formData
-      });
-      if (!res.ok) { const d = await res.json(); alert(d.error || 'Error al subir'); }
-      fileInput.value = '';
-    } catch { alert('Error de conexión'); }
-    uploading = false;
+    const files = Array.from(fileInput.files);
+    fileInput.value = '';
+
+    // Lanzar todas las subidas en paralelo
+    const promises = files.map((file) => uploadSingleFile(file));
+    await Promise.allSettled(promises);
+  }
+
+  async function uploadSingleFile(file) {
+    const id = Math.random().toString(36).slice(2);
+    const entry = { id, name: file.name, progress: 0, done: false, error: null };
+    uploads = [...uploads, entry];
+
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('sala_id', room.id);
+      formData.append('file', file);
+
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable) {
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          uploads = uploads.map(u => u.id === id ? { ...u, progress: pct } : u);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          uploads = uploads.map(u => u.id === id ? { ...u, progress: 100, done: true } : u);
+          setTimeout(() => {
+            uploads = uploads.filter(u => u.id !== id);
+          }, 2500);
+          resolve({ ok: true });
+        } else {
+          let errorMsg = 'Error al subir';
+          try {
+            const resp = JSON.parse(xhr.responseText);
+            errorMsg = resp.error || errorMsg;
+          } catch (e) {}
+          uploads = uploads.map(u => u.id === id ? { ...u, error: errorMsg } : u);
+          setTimeout(() => { uploads = uploads.filter(u => u.id !== id); }, 5000);
+          resolve({ ok: false });
+        }
+      };
+
+      xhr.onerror = () => {
+        uploads = uploads.map(u => u.id === id ? { ...u, error: 'Sin conexión' } : u);
+        setTimeout(() => { uploads = uploads.filter(u => u.id !== id); }, 4000);
+        resolve({ ok: false });
+      };
+
+      xhr.open('POST', `${API}/upload/file`);
+      xhr.setRequestHeader('Authorization', `Bearer ${room.token}`);
+      xhr.send(formData);
+    });
   }
 
   async function leaveRoom() {
-    const usuarioId = room.usuarioId || userContext.usuarioId;
-    
-    if (!usuarioId) {
-      console.error('No usuario_id available to leave room');
-      return;
-    }
-    
     try {
-      const response =await fetch('http://localhost:8080/rooms/leave', {
+      await fetch(`${API}/rooms/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          usuario_id: usuarioId,
-          sala_id: room.id 
+          sala_id: room.id,
+          nickname: userContext.nickname,
+          device_id: userContext.deviceId
         })
       });
-       if (!response.ok) {
-        const error = await response.json();
-        console.error('Error al salir:', error);
-      } else {
-        console.log('Successfully left room');
-      }
     } catch {}
+    if (ws) ws.close();
     dispatch('leave');
   }
 
@@ -123,7 +178,6 @@
           <span class="badge badge--{room.type}">{room.type}</span>
         </div>
       </div>
-      <!-- WS Status -->
       <div class="ws-status ws-{wsStatus}">
         <div class="status-dot"></div>
         {wsStatus === 'open' ? 'Conectado' : wsStatus === 'connecting' ? 'Conectando…' : 'Desconectado'}
@@ -149,6 +203,27 @@
         {/each}
       </div>
     </div>
+
+    <!-- Upload progress panel -->
+    {#if uploads.length > 0}
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section uploads-panel">
+        <div class="section-label">Subiendo archivos</div>
+        {#each uploads as up (up.id)}
+          <div class="upload-item">
+            <div class="upload-name">{up.name}</div>
+            {#if up.error}
+              <div class="upload-error">{up.error}</div>
+            {:else}
+              <div class="progress-track">
+                <div class="progress-fill" class:done={up.done} style="width:{up.progress}%"></div>
+              </div>
+              <span class="upload-pct">{up.done ? '✓' : up.progress + '%'}</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
 
     <div class="sidebar-footer">
       <button class="btn-danger leave-btn" on:click={leaveRoom}>
@@ -180,7 +255,7 @@
         </div>
       {/if}
 
-      {#each messages as msg, i}
+      {#each messages as msg}
         {#if msg.tipo === 'join' || msg.tipo === 'leave'}
           <div class="system-msg">
             <div class="system-line"></div>
@@ -197,7 +272,7 @@
               {#if !isOwn(msg)}<span class="bubble-sender">{msg.nickname}</span>{/if}
               <p>{msg.texto}</p>
               {#if msg.file_url}
-                <a href={'http://localhost:8080' + msg.file_url} target="_blank" class="file-chip">
+                <a href={API + msg.file_url} target="_blank" class="file-chip">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   Descargar archivo
                 </a>
@@ -224,13 +299,9 @@
     <!-- Input bar -->
     <div class="chat-input-bar">
       {#if room.type === 'multimedia'}
-        <label class="attach-btn" class:uploading title="Adjuntar archivo">
-          {#if uploading}
-            <span class="spinner-sm"></span>
-          {:else}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          {/if}
-          <input type="file" bind:this={fileInput} on:change={uploadFile} disabled={uploading} hidden />
+        <label class="attach-btn" title="Adjuntar archivos (múltiples)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          <input type="file" bind:this={fileInput} on:change={handleFilesSelected} multiple hidden />
         </label>
       {/if}
 
@@ -272,8 +343,8 @@
     overflow: hidden;
   }
 
-  .sidebar-section { padding: 1.25rem 1.25rem; }
-  .sidebar-divider { height: 1px; background: rgba(255,255,255,0.14); margin: 0; }
+  .sidebar-section { padding: 1.25rem; }
+  .sidebar-divider { height: 1px; background: rgba(255,255,255,0.14); margin: 0; flex-shrink: 0; }
 
   .room-title-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
   .room-icon {
@@ -304,7 +375,8 @@
   }
   .ws-open .status-dot { animation: pulse-ring 2s infinite; }
 
-  .users-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  /* Users */
+  .users-section { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
   .section-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 0.75rem; }
 
   .users-list { display: flex; flex-direction: column; gap: 0.25rem; overflow-y: auto; flex: 1; }
@@ -323,11 +395,26 @@
     font-size: 0.72rem; font-weight: 700; flex-shrink: 0;
   }
   .avatar-me { background: linear-gradient(135deg, var(--indigo), var(--pink)); }
-  .user-name { font-size: 0.83rem; color: var(--text-2); flex: 1; }
+  .user-name { font-size: 0.83rem; color: var(--text-2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .is-me .user-name { color: var(--text-1); }
-  .online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 5px var(--green); }
+  .online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 5px var(--green); flex-shrink: 0; }
 
-  .sidebar-footer { padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.06); }
+  /* Upload progress */
+  .uploads-panel { flex-shrink: 0; }
+  .upload-item { margin-bottom: 0.6rem; }
+  .upload-name { font-size: 0.72rem; color: var(--text-2); margin-bottom: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .progress-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--indigo), #7c3aed); transition: width 0.2s ease; }
+  .progress-fill.done { background: var(--green); }
+  .upload-pct { font-size: 0.65rem; color: var(--text-3); margin-top: 0.15rem; display: block; text-align: right; }
+  .upload-error { font-size: 0.7rem; color: var(--red); margin-top: 0.15rem; }
+
+  /* Footer */
+  .sidebar-footer {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid rgba(255,255,255,0.10);
+    flex-shrink: 0;
+  }
   .leave-btn { width: 100%; font-size: 0.82rem; }
 
   /* ── Chat ────────────────────────────────── */
@@ -342,6 +429,7 @@
     background: rgba(3, 5, 15, 0.65);
     backdrop-filter: blur(16px);
     border-bottom: 1px solid rgba(255,255,255,0.16);
+    flex-shrink: 0;
   }
   .chat-title { display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; }
   .chat-meta { font-size: 0.75rem; color: var(--text-3); }
@@ -364,7 +452,6 @@
   }
   .empty-chat p { font-size: 0.85rem; }
 
-  /* System messages */
   .system-msg {
     display: flex; align-items: center; gap: 0.75rem;
     margin: 0.25rem 0;
@@ -372,7 +459,6 @@
   .system-line { flex: 1; height: 1px; background: rgba(255,255,255,0.06); }
   .system-msg span { font-size: 0.72rem; color: var(--text-3); white-space: nowrap; }
 
-  /* Message rows */
   .msg-row { display: flex; align-items: flex-end; gap: 0.5rem; max-width: 75%; }
   .row-start { align-self: flex-start; }
   .row-end   { align-self: flex-end; flex-direction: row-reverse; }
@@ -384,7 +470,6 @@
     font-size: 0.68rem; font-weight: 700; flex-shrink: 0; margin-bottom: 2px;
   }
 
-  /* Bubbles */
   .bubble {
     padding: 0.65rem 0.9rem;
     border-radius: 14px;
@@ -429,24 +514,24 @@
 
   /* Input bar */
   .chat-input-bar {
-    padding: 1rem 1.25rem;
+    padding: 0.85rem 1.25rem;
     background: rgba(3, 5, 15, 0.75);
     backdrop-filter: blur(20px);
     border-top: 1px solid rgba(255,255,255,0.16);
-    display: flex; align-items: center; gap: 0.75rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    flex-shrink: 0;
   }
 
   .attach-btn {
     width: 40px; height: 40px; flex-shrink: 0;
     border-radius: 10px;
     background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; color: var(--text-3);
     transition: all 0.2s;
   }
-  .attach-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-2); }
-  .attach-btn.uploading { opacity: 0.6; cursor: wait; }
+  .attach-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-2); border-color: rgba(255,255,255,0.28); }
 
   .input-pill {
     flex: 1; display: flex; align-items: center; gap: 0.5rem;
@@ -455,6 +540,7 @@
     border-radius: 14px;
     padding: 0.4rem 0.4rem 0.4rem 1rem;
     transition: border-color 0.2s;
+    min-width: 0;
   }
   .input-pill:focus-within {
     border-color: rgba(165,180,252,0.50);
@@ -465,13 +551,13 @@
     flex: 1; background: transparent; border: none; resize: none;
     font-size: 0.9rem; padding: 0.25rem 0; max-height: 120px;
     line-height: 1.45; outline: none; box-shadow: none;
-    color: var(--text-1);
+    color: var(--text-1); min-width: 0;
   }
 
   .send-btn {
     width: 36px; height: 36px; border-radius: 10px; padding: 0;
     background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.10);
     color: var(--text-3);
     flex-shrink: 0;
     transition: all 0.2s var(--ease-out);
@@ -484,14 +570,5 @@
   }
   .send-btn.active:hover { transform: scale(1.08); }
   .send-btn::after { display: none; }
-  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .spinner-sm {
-    width: 14px; height: 14px;
-    border: 2px solid rgba(255,255,255,0.2);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
 </style>

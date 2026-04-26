@@ -4,6 +4,7 @@ import (
 	"chat_distribuido/controladores/sockets"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -54,9 +55,20 @@ func UploadFileHandler(c *gin.Context) {
 		".gif":  true,
 		".pdf":  true,
 		".txt":  true,
+		".mp3":  true,
+		".mp4":  true,
+		".docx": true,
+		".doc":  true,
+		".xlsx": true,
+		".xls":  true,
+		".pptx": true,
+		".ppt":  true,
+		".zip":  true,
+		".csv":  true,
 	}
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
+	log.Printf("Recibido archivo: %s con extensión: %s", header.Filename, ext)
 	if !allowedTypes[ext] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Tipo de archivo no permitido"})
 		return

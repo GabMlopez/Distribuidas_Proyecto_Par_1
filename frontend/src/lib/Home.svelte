@@ -2,6 +2,8 @@
   import { createEventDispatcher, onMount } from 'svelte';
   const dispatch = createEventDispatcher();
 
+  function logout() { dispatch('logout'); }
+
   export let userContext;
   console.log('Home user context:', userContext);
   let rooms = [];
@@ -9,6 +11,7 @@
   let error = '';
   let showCreateModal = false;
   let showJoinModal = false;
+  let showEditModal = false;
   let newRoomPin = '';
   let newRoomType = 'texto';
   let selectedRoomId = '';
@@ -18,6 +21,10 @@
   let joining = false;
   let creating = false;
   let salanombre = '';
+  let updating = false;
+  let editPin = '';
+  let editType = 'texto';
+
   const isAdmin = !!userContext.token;
 
   async function fetchRooms() {
@@ -41,7 +48,7 @@
     if (newRoomPin.length < 4) return;
     creating = true;
 
-    if (salanombre== null || salanombre.trim() === '') {
+    if (salanombre == null || salanombre.trim() === '') {
       salanombre = 'Sala sin nombre';
     }
 
@@ -51,7 +58,7 @@
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userContext.token}` },
         body: JSON.stringify({ pin: newRoomPin, tipo: newRoomType, nombre: salanombre})
       });
-      if (res.ok) { showCreateModal = false; newRoomPin = ''; await fetchRooms(); }
+      if (res.ok) { showCreateModal = false; newRoomPin = ''; salanombre = ''; await fetchRooms(); }
       else { const d = await res.json(); alert(d.error || 'Error creando sala'); }
     } catch { alert('Error de conexión'); }
     creating = false;
@@ -64,6 +71,7 @@
     joinError = ''; 
     showJoinModal = true;
   }
+
   async function joinRoom() {
     joining = true; joinError = '';
     try {
@@ -75,7 +83,7 @@
       const data = await res.json();
       if (res.ok) {
         showJoinModal = false;
-       dispatch('join', { 
+        dispatch('join', { 
           id: selectedRoomId,
           nombre: selectedRoomName,
           token: data.token, 
@@ -88,6 +96,40 @@
       }
     } catch { joinError = 'Error de conexión'; }
     joining = false;
+  }
+
+  async function deleteRoom(id) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar la sala ${id}?`)) return;
+    try {
+      const res = await fetch(`http://localhost:8080/admin/rooms/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${userContext.token}` }
+      });
+      if (res.ok) await fetchRooms();
+      else alert('Error al eliminar sala');
+    } catch { alert('Error de conexión'); }
+  }
+
+  function openEdit(room) {
+    selectedRoomId = room.sala_id;
+    editPin = room.pin;
+    editType = room.tipo;
+    showEditModal = true;
+  }
+
+  async function updateRoom() {
+    if (editPin.length < 4) return;
+    updating = true;
+    try {
+      const res = await fetch(`http://localhost:8080/admin/rooms/${selectedRoomId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userContext.token}` },
+        body: JSON.stringify({ pin: editPin, tipo: editType })
+      });
+      if (res.ok) { showEditModal = false; await fetchRooms(); }
+      else alert('Error al actualizar sala');
+    } catch { alert('Error de conexión'); }
+    updating = false;
   }
 </script>
 
@@ -104,6 +146,10 @@
       <div class="avatar">{userContext.nickname.charAt(0).toUpperCase()}</div>
       <span class="username">{userContext.nickname}</span>
       {#if isAdmin}<span class="badge badge--admin">Admin</span>{/if}
+      <button class="btn-ghost logout-btn" on:click={logout} title="Cerrar sesión">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Salir
+      </button>
     </div>
   </header>
 
@@ -155,9 +201,21 @@
             <div class="room-top">
               <div class="room-id">
                 <div class="room-dot dot-{room.tipo}"></div>
-                <code>{room.nombre}</code>
+                <code>{room.nombre || room.sala_id}</code>
               </div>
-              <span class="badge badge--{room.tipo}">{room.tipo}</span>
+              <div class="room-top-actions">
+                <span class="badge badge--{room.tipo}">{room.tipo}</span>
+                {#if isAdmin}
+                  <div class="admin-actions">
+                    <button class="action-icon-btn edit" on:click={() => openEdit(room)} title="Editar">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="action-icon-btn delete" on:click={() => deleteRoom(room.sala_id)} title="Eliminar">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                    </button>
+                  </div>
+                {/if}
+              </div>
             </div>
 
             {#if isAdmin}
@@ -263,6 +321,44 @@
   </div>
 {/if}
 
+<!-- Edit Modal -->
+{#if showEditModal}
+  <div class="modal-backdrop" on:click|self={() => showEditModal = false}>
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <h3>Editar sala</h3>
+          <code class="room-id-modal">{selectedRoomId}</code>
+        </div>
+        <button class="btn-ghost icon-btn" on:click={() => showEditModal = false}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="form-field">
+        <label>Tipo de sala</label>
+        <div class="type-selector">
+          <button class="type-btn {editType === 'texto' ? 'selected' : ''}" on:click={() => editType = 'texto'}>
+            Texto
+          </button>
+          <button class="type-btn {editType === 'multimedia' ? 'selected' : ''}" on:click={() => editType = 'multimedia'}>
+            Multimedia
+          </button>
+        </div>
+      </div>
+      <div class="form-field">
+        <label>PIN de acceso (4-6 dígitos)</label>
+        <input type="text" bind:value={editPin} placeholder="Mínimo 4 dígitos" maxlength="6" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" on:click={() => showEditModal = false}>Cancelar</button>
+        <button class="btn-primary" on:click={updateRoom} disabled={editPin.length < 4 || updating}>
+          {updating ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .page { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -273,7 +369,7 @@
     background: rgba(5, 8, 19, 0.6);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid rgba(255,255,255,0.07);
+    border-bottom: 1px solid rgba(255,255,255,0.15);
     position: sticky; top: 0; z-index: 100;
   }
   .header-brand {
@@ -288,6 +384,12 @@
     color: var(--indigo-light);
   }
   .header-user { display: flex; align-items: center; gap: 0.6rem; }
+  .logout-btn {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
+    gap: 0.35rem;
+    margin-left: 0.25rem;
+  }
   .avatar {
     width: 30px; height: 30px; border-radius: 50%;
     background: linear-gradient(135deg, var(--indigo), var(--pink));
@@ -327,8 +429,23 @@
     cursor: default;
   }
 
-  .room-top { display: flex; justify-content: space-between; align-items: center; }
+  .room-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
   .room-id { display: flex; align-items: center; gap: 0.5rem; }
+  .room-top-actions { display: flex; align-items: center; gap: 0.75rem; }
+  .admin-actions { display: flex; gap: 0.4rem; padding-left: 0.5rem; border-left: 1px solid rgba(255,255,255,0.1); }
+  
+  .action-icon-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-3);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .action-icon-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-1); }
+  .action-icon-btn.edit:hover { border-color: var(--indigo); color: var(--indigo-light); }
+  .action-icon-btn.delete:hover { border-color: var(--red); color: var(--red); }
+  
   .room-id code {
     font-size: 0.9rem; font-weight: 700;
     background: rgba(255,255,255,0.06);
@@ -336,7 +453,7 @@
     letter-spacing: 0.05em;
   }
   .room-dot {
-    width: 7px; height: 7px; border-radius: 50%;
+    width: 8px; height: 8px; border-radius: 50%;
     flex-shrink: 0;
     box-shadow: 0 0 6px currentColor;
   }

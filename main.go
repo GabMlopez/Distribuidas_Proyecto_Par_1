@@ -90,12 +90,12 @@ func main() {
 		controladores.HandleWebSocket(hub, c)
 	})
 
-	// Subida de archivos
+	// Subida de archivos (Protegido para subir, público para descargar vía link)
+	r.GET("/upload/file/:filename", controladores.GetFileHandler)
 	uploadRoutes := r.Group("/upload")
 	uploadRoutes.Use(middleware.AuthMiddlewareUser())
 	{
 		uploadRoutes.POST("/file", controladores.UploadFileHandler)
-		uploadRoutes.GET("/file/:filename", controladores.GetFileHandler)
 	}
 
 	port := os.Getenv("PORT")
