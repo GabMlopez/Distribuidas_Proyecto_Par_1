@@ -1,0 +1,105 @@
+package main
+
+import (
+	"chat_distribuido/controladores"
+	"chat_distribuido/controladores/sockets"
+	"chat_distribuido/db"
+	"chat_distribuido/middleware"
+	"log"
+	"os"
+
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Error cargando .env file")
+	}
+
+	db.ConnectDB()
+
+	// Crear hub central de WebSocket
+	hub := sockets.Nuevo_Hub()
+	go hub.Run()
+	controladores.SetHub(hub)
+
+	// Configurar router
+	r := gin.Default()
+
+	// Configurar CORS
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
+
+	// Rutas públicas
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "OK"})
+	})
+
+	// Autenticación
+	auth := r.Group("/auth")
+	{
+		auth.POST("/login", controladores.Login_handler)
+		auth.POST("/logout", controladores.Logout)
+	}
+
+	// Gestión de salas
+	adminRoutes := r.Group("/admin")
+	adminRoutes.Use(middleware.AuthMiddlewareAdmin())
+	{
+		// Crear sala (solo admin)
+		adminRoutes.POST("/rooms", controladores.CreateSalasHandler)
+
+		// Actualizar sala (solo admin)
+		adminRoutes.PUT("/rooms/:roomId", controladores.UpdateSalaHandler)
+
+		// Eliminar sala (solo admin)
+		adminRoutes.DELETE("/rooms/:roomId", controladores.DeleteSalaHandler)
+
+		// Obtener todas las salas (admin)
+		adminRoutes.GET("/rooms", controladores.GetAllSalasAdmin)
+	}
+
+	roomRoutesClosed := r.Group("/rooms")
+	roomRoutesClosed.Use(middleware.AuthMiddlewareUser())
+	{
+		roomRoutesClosed.GET("/list", controladores.ListaSalas)
+	}
+
+	roomRoutes := r.Group("/rooms")
+	{
+		roomRoutes.POST("/join", controladores.UnirseSalaHandler)
+		roomRoutes.POST("/leave", controladores.DejarSalaHandler)
+	}
+
+	// WebSocket
+	r.GET("/ws/:roomId", func(c *gin.Context) {
+		controladores.HandleWebSocket(hub, c)
+	})
+
+	// Subida de archivos
+	uploadRoutes := r.Group("/upload")
+	uploadRoutes.Use(middleware.AuthMiddlewareUser())
+	{
+		uploadRoutes.POST("/file", controladores.UploadFileHandler)
+		uploadRoutes.GET("/file/:filename", controladores.GetFileHandler)
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Servidor corriendo en el puerto %s", port)
+	r.Run(":" + port)
+}
