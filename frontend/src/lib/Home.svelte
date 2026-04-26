@@ -17,7 +17,7 @@
   let joinError = '';
   let joining = false;
   let creating = false;
-
+  let salanombre = '';
   const isAdmin = !!userContext.token;
 
   async function fetchRooms() {
@@ -40,11 +40,16 @@
   async function createRoom() {
     if (newRoomPin.length < 4) return;
     creating = true;
+
+    if (salanombre== null || salanombre.trim() === '') {
+      salanombre = 'Sala sin nombre';
+    }
+
     try {
       const res = await fetch('http://localhost:8080/admin/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userContext.token}` },
-        body: JSON.stringify({ pin: newRoomPin, tipo: newRoomType })
+        body: JSON.stringify({ pin: newRoomPin, tipo: newRoomType, nombre: salanombre})
       });
       if (res.ok) { showCreateModal = false; newRoomPin = ''; await fetchRooms(); }
       else { const d = await res.json(); alert(d.error || 'Error creando sala'); }
@@ -203,6 +208,10 @@
             Multimedia
           </button>
         </div>
+      </div>
+      <div class="form-field">
+        <label>Nombre para la sala</label>
+        <input type="text" bind:value={salanombre} placeholder="Nombre de la sala" maxlength="18" />
       </div>
       <div class="form-field">
         <label>PIN de acceso</label>
