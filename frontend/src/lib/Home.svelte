@@ -24,13 +24,14 @@
   let updating = false;
   let editPin = '';
   let editType = 'texto';
+  const API = 'http://localhost:8080';
 
   const isAdmin = !!userContext.token;
 
   async function fetchRooms() {
     loading = true; error = '';
     try {
-      const url = isAdmin ? 'http://localhost:8080/admin/rooms' : 'http://localhost:8080/rooms/list';
+      const url = isAdmin ? `${API}/admin/rooms` : `${API}/rooms/list`;
       const headers = isAdmin ? { Authorization: `Bearer ${userContext.token}` } : {};
       const res = await fetch(url, { headers });
       const data = await res.json();
@@ -53,7 +54,7 @@
     }
 
     try {
-      const res = await fetch('http://localhost:8080/admin/rooms', {
+      const res = await fetch(`${API}/admin/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userContext.token}` },
         body: JSON.stringify({ pin: newRoomPin, tipo: newRoomType, nombre: salanombre})
@@ -75,7 +76,7 @@
   async function joinRoom() {
     joining = true; joinError = '';
     try {
-      const res = await fetch('http://localhost:8080/rooms/join', {
+      const res = await fetch(`${API}/rooms/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sala_id: selectedRoomId, pin: joinPin, nickname: userContext.nickname, device_id: userContext.deviceId })
@@ -101,7 +102,7 @@
   async function deleteRoom(id) {
     if (!confirm(`¿Estás seguro de que deseas eliminar la sala ${id}?`)) return;
     try {
-      const res = await fetch(`http://localhost:8080/admin/rooms/${id}`, {
+      const res = await fetch(`${API}/admin/rooms/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${userContext.token}` }
       });
@@ -121,7 +122,7 @@
     if (editPin.length < 4) return;
     updating = true;
     try {
-      const res = await fetch(`http://localhost:8080/admin/rooms/${selectedRoomId}`, {
+      const res = await fetch(`${API}/admin/rooms/${selectedRoomId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userContext.token}` },
         body: JSON.stringify({ pin: editPin, tipo: editType })

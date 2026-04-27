@@ -59,3 +59,13 @@ func VerificarToken(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
 
 	return nil, nil, jwt.ErrTokenInvalidClaims
 }
+
+// VerificarTokenAdmin valida un token de administrador
+func VerificarTokenAdmin(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
+	return VerificarToken(tokenString)
+}
+
+// VerificarTokenUser valida un token de usuario normal
+func VerificarTokenUser(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
+	return VerificarToken(tokenString)
+}

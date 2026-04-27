@@ -8,6 +8,7 @@
   let nickname = '';
   let error = '';
   let loading = false;
+  const API = 'http://localhost:8080';
 
   async function handleLogin() {
     error = '';
@@ -15,7 +16,7 @@
 
     if (mode === 'admin') {
       try {
-        const res = await fetch('http://localhost:8080/auth/login', {
+        const res = await fetch(`${API}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ usuario: username, contrasenia: password })

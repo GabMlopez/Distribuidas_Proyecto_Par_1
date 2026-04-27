@@ -48,7 +48,9 @@
 
   function connectWebSocket() {
     wsStatus = 'connecting';
-    const url = `ws://localhost:8080/ws/${room.id}?nickname=${encodeURIComponent(userContext.nickname)}&sala_id=${room.id}`;
+    const wsProtocol = API.startsWith('https') ? 'wss' : 'ws';
+    const wsHost = API.replace(/^https?:\/\//, '');
+    const url = `${wsProtocol}://${wsHost}/ws/${room.id}?nickname=${encodeURIComponent(userContext.nickname)}&sala_id=${room.id}`;
     ws = new WebSocket(url);
 
     ws.onopen  = () => { wsStatus = 'open'; };
