@@ -61,3 +61,7 @@ func Login_handler(c *gin.Context) {
 		IsAdmin:   true,
 	})
 }
+
+func Logout(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "Sesión cerrada exitosamente"})
+}
