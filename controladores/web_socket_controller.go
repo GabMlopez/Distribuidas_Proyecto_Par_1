@@ -44,6 +44,17 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		return
 	}
 
+	// Validar que el usuario no esté ya conectado en otra sala (usando Redis)
+	activeRoom, errRedis := db.RedisClient.Get(c.Request.Context(), "user_active_room:"+nickname).Result()
+	if errRedis == nil && activeRoom != "" && activeRoom != salaID {
+		conn.WriteJSON(sockets.Mensaje{
+			Tipo:  "error",
+			Texto: "Ya te encuentras conectado en la sala '" + activeRoom + "'. Usa un solo dispositivo o cierra esa sesión primero para ingresar a esta.",
+		})
+		conn.Close()
+		return
+	}
+
 	cliente := &sockets.Cliente{
 		Hub:      hub,
 		Conn:     conn,

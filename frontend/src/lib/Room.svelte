@@ -59,7 +59,12 @@
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        if (data.type === 'user_list' || data.tipo === 'user_list') {
+        if (data.type === 'error' || data.tipo === 'error') {
+          alert('Error: ' + data.texto);
+          wsStatus = 'closed';
+          dispatch('leave'); // Opcional, forzar la salida a la lista de salas
+          return;
+        } else if (data.type === 'user_list' || data.tipo === 'user_list') {
           try {
             const parsed = typeof data.texto === 'string' ? JSON.parse(data.texto) : data;
             users = parsed.users || [];

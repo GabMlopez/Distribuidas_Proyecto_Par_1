@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
@@ -50,6 +51,9 @@ func (h *Hub) Run() {
 			h.Salas[client.SalaId][client] = true
 			h.mutex.Unlock()
 
+			// Registrar en Redis la sala activa del usuario con una caducidad por seguridad (ej. 24h)
+			h.RedisClient.Set(h.ctx, "user_active_room:"+client.Nickname, client.SalaId, 24*time.Hour)
+
 			h.notifyUserList(client.SalaId)
 			// Notificar que alguien se unió
 			go func(c *Cliente) {
@@ -64,10 +68,22 @@ func (h *Hub) Run() {
 
 		case client := <-h.Desregistro:
 			h.mutex.Lock()
+
+			// Determinar si este usuario tiene otras conexiones en esta u otras salas
+			userTieneMasConexiones := false
+
 			if clients, ok := h.Salas[client.SalaId]; ok {
 				if _, ok := clients[client]; ok {
 					delete(clients, client)
 					close(client.Envio)
+
+					// Verificar si el usuario aún tiene otra conexión en esta sala
+					for c := range clients {
+						if c.Nickname == client.Nickname {
+							userTieneMasConexiones = true
+							break
+						}
+					}
 
 					// Si la sala queda vacía, la eliminamos
 					if len(clients) == 0 {
@@ -76,6 +92,11 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mutex.Unlock()
+
+			// Eliminar registro de sala en Redis solo si ya no tiene conexiones activas
+			if !userTieneMasConexiones {
+				h.RedisClient.Del(h.ctx, "user_active_room:"+client.Nickname)
+			}
 
 			// Notificar usuarios actualizados
 			h.notifyUserList(client.SalaId)
