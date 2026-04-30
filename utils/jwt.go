@@ -103,5 +103,3 @@ func VerificarTokenUser(tokenString string) (*jwt.Token, jwt.MapClaims, error) {
 
 	return nil, nil, jwt.ErrTokenInvalidClaims
 }
-
-

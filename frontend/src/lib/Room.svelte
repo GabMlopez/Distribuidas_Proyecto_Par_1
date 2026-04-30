@@ -19,6 +19,9 @@
   // Subida paralela: lista de uploads activos
   let uploads = []; // [{ name, progress, done, error }]
 
+  let showSidebar = false; // Controla si el menú está abierto en móvil
+  function toggleSidebar() { showSidebar = !showSidebar; }
+  
   onMount(() => {
     connectWebSocket();
     // Desconexión automática al cerrar la pestaña/navegador
@@ -32,10 +35,10 @@
 
   function handleBeforeUnload() {
     // sendBeacon garantiza que la petición se complete aunque la página se cierre
+    console.log('Saliendo de la sala...' + room.id + ' usuario: ' + userContext.usuarioId);
     const payload = JSON.stringify({
       sala_id: room.id,
-      nickname: userContext.nickname,
-      device_id: userContext.deviceId
+      usuario_id: userContext.usuarioId
     });
     navigator.sendBeacon(`${API}/rooms/leave`, new Blob([payload], { type: 'application/json' }));
     if (ws) ws.close();
@@ -148,14 +151,14 @@
   }
 
   async function leaveRoom() {
+    console.log('Saliendo de la sala...' + room.id + ' usuario: ' + userContext.usuarioId);
     try {
       await fetch(`${API}/rooms/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           sala_id: room.id,
-          nickname: userContext.nickname,
-          device_id: userContext.deviceId
+          usuario_id: userContext.usuarioId
         })
       });
     } catch {}
@@ -170,10 +173,14 @@
 
   function isOwn(msg) { return msg.nickname === userContext.nickname; }
 </script>
+{#if showSidebar}
+  <div class="sidebar-overlay" on:click={toggleSidebar}></div>
+{/if}
+
 
 <div class="room-page">
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar {showSidebar ? 'sidebar-open' : ''}">
     <!-- Room info -->
     <div class="sidebar-section room-info">
       <div class="room-title-row">
@@ -239,11 +246,13 @@
       </button>
     </div>
   </aside>
-
   <!-- Chat area -->
   <main class="chat-area">
     <!-- Chat header -->
     <div class="chat-header">
+      <button class="menu-toggle" on:click={toggleSidebar}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="chat-title">
         <div class="room-dot dot-{room.type}"></div>
         <span> <strong>{roomDisplayName}</strong></span>
@@ -578,4 +587,88 @@
   .send-btn.active:hover { transform: scale(1.08); }
   .send-btn::after { display: none; }
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+  /* Layout base */
+.room-page {
+  display: flex; /* Cambiamos grid por flex */
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: #03050f; /* Aseguramos un fondo base */
+}
+
+.sidebar {
+  width: 270px; /* Ancho fijo para escritorio */
+  flex-shrink: 0; /* Evita que el sidebar se encoja */
+  height: 100%;
+  z-index: 10;
+  transition: transform 0.3s ease;
+  background: rgba(3, 5, 15, 0.75);
+}
+
+.chat-area {
+  flex-grow: 1; /* El chat toma todo el espacio restante */
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Importante para que el contenido no desborde el flex */
+}
+
+/* Botón de menú (oculto por defecto en escritorio) */
+.menu-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  padding: 0.5rem;
+  margin-right: 0.5rem;
+}
+
+/* --- RESPONSIVO --- */
+@media (max-width: 768px) {
+  .menu-toggle {
+    display: block; /* Aparece en móvil */
+  }
+
+  .sidebar {
+    position: fixed; /* Cambiado de absolute a fixed para que siempre cubra el alto total */
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    z-index: 1001; /* Un nivel por encima del overlay */
+    background: #0f172a; /* Color sólido oscuro para móvil */
+    box-shadow: 10px 0 15px -3px rgba(0, 0, 0, 0.5); /* Sombra para dar profundidad */
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; /* Asegura que el contenido interno se mantenga en columna */
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0); /* Desliza hacia adentro */
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+  }
+
+
+  /* Ajustes de burbujas en móvil */
+  .msg-row {
+    max-width: 90%;
+  }
+
+  /* El input bar debe ser cómodo */
+  .chat-input-bar {
+    padding: 0.75rem;
+  }
+}
 </style>

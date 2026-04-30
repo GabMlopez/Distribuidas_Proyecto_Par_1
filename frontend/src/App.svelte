@@ -7,12 +7,19 @@
   let userContext = {
     token: null,
     nickname: '',
-    deviceId: 'dev_' + Math.random().toString(36).substr(2, 9)
+    deviceId: 'dev_' + Math.random().toString(36).substr(2, 9),
+    usuarioId: null
   };
   let currentRoom = null;
 
   function handleLogin(event) {
-    userContext.token = event.detail.token;
+    userContext = {
+      nickname: event.detail.nickname,
+      usuarioId: event.detail.usuarioId,
+      deviceId: 'device_' + Math.random().toString(36).substring(7),
+      token: event.detail.token,
+      isAdmin: event.detail.isAdmin || false
+    };
     userContext.nickname = event.detail.nickname || 'Admin';
     currentView = 'home';
   }
@@ -23,7 +30,11 @@
       nombre: event.detail.nombre,
       type: event.detail.type,
       token: event.detail.token,
-      usuarioId: event.detail.usuario_id 
+    };
+    userContext = {
+      ...userContext,
+      usuarioId: event.detail.usuario_id, 
+      nickname: event.detail.nickname
     };
     currentView = 'room';
   }
@@ -34,7 +45,7 @@
   }
 
   function handleLogout() {
-    userContext = { token: null, nickname: '', deviceId: 'dev_' + Math.random().toString(36).substr(2, 9) };
+    userContext = { token: null, nickname: '', deviceId: 'dev_' + Math.random().toString(36).substr(2, 9), usuarioId: null };
     currentRoom = null;
     currentView = 'login';
   }

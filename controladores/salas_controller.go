@@ -7,6 +7,7 @@ import (
 	"chat_distribuido/utils"
 	"crypto/rand"
 	"encoding/hex"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,6 +47,11 @@ type RoomResponse struct {
 	Tipo     string `json:"tipo"`
 	Usuarios int    `json:"usuarios"`
 	Nombre   string `json:"nombre,omitempty"`
+}
+
+type UserLeaveRequest struct {
+	UsuarioID string `json:"usuario_id,omitempty"`
+	SalaID    string `json:"sala_id"`
 }
 
 func validarSalaYPin(ctx *gin.Context, salaID, pin string) (*modelos.Sala, error) {
@@ -342,10 +348,9 @@ func getActiveUsersInRoom(ctx *gin.Context, salaID string) []map[string]string {
 }
 
 func DejarSalaHandler(c *gin.Context) {
-	var req struct {
-		UsuarioID string `json:"usuario_id" binding:"required"`
-		SalaID    string `json:"sala_id" binding:"required"`
-	}
+	var req UserLeaveRequest
+
+	log.Println("\nRecibida solicitud para dejar sala:", req)
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
@@ -355,17 +360,12 @@ func DejarSalaHandler(c *gin.Context) {
 	collection := db.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
-			"activo":      false,
-			"left_at":     time.Now(),
-			"last_active": time.Now(),
-		},
-		"$inc": bson.M{
-			"total_visits": 1,
+			"activo": false,
 		},
 	}
 
 	result, err := collection.UpdateOne(c.Request.Context(),
-		bson.M{"usuario_id": req.UsuarioID, "sala_id": req.SalaID},
+		bson.M{"usuario_id": req.UsuarioID, "sala_id": req.SalaID, "activo": true},
 		update)
 
 	if err != nil || result.ModifiedCount == 0 {

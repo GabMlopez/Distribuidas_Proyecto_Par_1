@@ -141,7 +141,7 @@
       <div class="header-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
-      <span>Chat Distribuido</span>
+      <span style="padding-left: 1em; padding-right: 1em;">Chat Distribuido</span>
     </div>
     <div class="header-user">
       <div class="avatar">{userContext.nickname.charAt(0).toUpperCase()}</div>
@@ -198,46 +198,63 @@
     {:else}
       <div class="rooms-grid">
         {#each rooms as room, i}
-          <div class="room-card glass--card" style="animation-delay:{i*60}ms" class:anim-fade-up={true}>
-            <div class="room-top">
-              <div class="room-id">
-                <div class="room-dot dot-{room.tipo}"></div>
-                <code>{room.nombre || room.sala_id}</code>
-              </div>
-              <div class="room-top-actions">
-                <span class="badge badge--{room.tipo}">{room.tipo}</span>
-                {#if isAdmin}
-                  <div class="admin-actions">
-                    <button class="action-icon-btn edit" on:click={() => openEdit(room)} title="Editar">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </button>
-                    <button class="action-icon-btn delete" on:click={() => deleteRoom(room.sala_id)} title="Eliminar">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                    </button>
-                  </div>
-                {/if}
-              </div>
-            </div>
-
-            {#if isAdmin}
-              <div class="room-meta">
-                <div class="meta-item">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  PIN: <strong>{room.pin}</strong>
+          <div class="room-card glass--card" style="animation-delay:{i*60}ms">
+            <div class="room-card-content">
+              <div class="room-header">
+                <div class="room-info">
+                  <div class="room-dot dot-{room.tipo}"></div>
+                  <code class="room-name">{room.nombre || room.sala_id}</code>
                 </div>
+                <span class="badge badge--{room.tipo}">{room.tipo}</span>
               </div>
-            {/if}
+              {#if isAdmin}
+                <div class="room-admin-row">
+                  <div class="room-pin">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    PIN: <strong>{room.pin}</strong>
+                  </div>
+                 <div class="room-actions">
+                  <button class="action-btn edit-btn" on:click={() => openEdit(room)} title="Editar sala">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button class="action-btn delete-btn" on:click={() => deleteRoom(room.sala_id)} title="Eliminar sala">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      <line x1="10" y1="12" x2="10" y2="18"/>
+                      <line x1="14" y1="12" x2="14" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                </div>
+              {/if}
 
-            <div class="room-footer">
-              <div class="users-count">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                {room.usuarios ?? 0} conectado{room.usuarios !== 1 ? 's' : ''}
+              <div class="room-footer">
+                <div class="users-count">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                  {room.usuarios ?? 0} conectado{room.usuarios !== 1 ? 's' : ''}
+                </div>
+                <button class="btn-primary join-btn" on:click={() => openJoin(room)}>
+                  Unirse
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                </button>
               </div>
-              <button class="btn-primary join-btn" on:click={() => openJoin(room)}>
-                Unirse
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              </button>
             </div>
+
+            
           </div>
         {/each}
       </div>
@@ -398,6 +415,28 @@
     font-size: 0.8rem; font-weight: 700;
   }
   .username { font-size: 0.85rem; color: var(--text-2); }
+  .badge {
+  padding: 0.25rem 0.7rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.badge--texto {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.badge--multimedia {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.25);
+}
+
   .badge--admin {
     background: rgba(236, 72, 153, 0.15);
     color: #f472b6;
@@ -425,53 +464,260 @@
   .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.25rem; }
 
   .room-card {
-    padding: 1.5rem;
-    display: flex; flex-direction: column; gap: 1.25rem;
-    cursor: default;
+  background: rgba(8, 12, 28, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 1.25rem;
+  position: relative;
+  transition: all 0.2s ease;
+  cursor: default;
+  display: flex;
+  gap: 1rem;
+}
+
+.room-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.room-card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+  .room-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; 
+  flex-shrink: 0;
   }
 
-  .room-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-  .room-id { display: flex; align-items: center; gap: 0.5rem; }
+  .room-admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.5rem 0;
+}
+
+/* PIN a la izquierda */
+.room-pin {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.room-pin strong {
+  color: var(--text-2);
+  font-family: monospace;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
+
+/* Botones a la derecha */
+.room-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.room-pin {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  flex-shrink: 0; 
+  margin-right: auto;  
+}
+  .room-id {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; 
+  flex: 1;
+  min-width: 0; 
+}
+.room-header {
+  display: flex;
+  justify-content: space-between;  /* Esto empuja los botones a la derecha */
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.room-id code {
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.3rem 0.7rem; 
+  border-radius: 8px;
+  letter-spacing: 0.05em;
+  word-break: break-all; 
+}
+
   .room-top-actions { display: flex; align-items: center; gap: 0.75rem; }
-  .admin-actions { display: flex; gap: 0.4rem; padding-left: 0.5rem; border-left: 1px solid rgba(255,255,255,0.1); }
+  .admin-actions {
+    display: flex;
+    gap: 0.5rem; 
+    padding-left: 0.75rem; 
+    margin-left: 0.25rem;
+  }
   
-  .action-icon-btn {
-    width: 28px; height: 28px; border-radius: 6px;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--text-3);
-    cursor: pointer; transition: all 0.2s;
-  }
-  .action-icon-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-1); }
-  .action-icon-btn.edit:hover { border-color: var(--indigo); color: var(--indigo-light); }
-  .action-icon-btn.delete:hover { border-color: var(--red); color: var(--red); }
-  
-  .room-id code {
-    font-size: 0.9rem; font-weight: 700;
-    background: rgba(255,255,255,0.06);
-    padding: 0.2rem 0.5rem; border-radius: 5px;
-    letter-spacing: 0.05em;
-  }
-  .room-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    flex-shrink: 0;
-    box-shadow: 0 0 6px currentColor;
-  }
-  .dot-texto     { background: var(--indigo-light); color: var(--indigo-light); }
-  .dot-multimedia{ background: #f472b6; color: #f472b6; }
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
 
-  .room-meta { font-size: 0.82rem; color: var(--text-3); }
-  .meta-item { display: flex; align-items: center; gap: 0.35rem; }
+/* Tamaño de los SVG dentro de botones */
+.action-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* Colores específicos */
+.edit-btn svg {
+  stroke: #a5b4fc;
+  fill: none;
+  stroke-width: 2;
+}
+
+.delete-btn svg {
+  stroke: #f43f5e;
+  fill: none;
+  stroke-width: 2;
+}
+
+/* Efectos hover */
+.action-btn:hover {
+  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.edit-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.edit-btn:hover svg {
+  stroke: #c7d2fe;
+}
+
+.delete-btn:hover {
+  background: rgba(244, 63, 94, 0.2);
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+.delete-btn:hover svg {
+  stroke: #fb7185;
+}
+
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.4), inset 0 0 4px rgba(99, 102, 241, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.8), inset 0 0 12px rgba(99, 102, 241, 0.3);
+  }
+}
+
+.delete-btn:hover {
+  animation-name: neonPulseRed;
+}
+
+@keyframes neonPulseRed {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(244, 63, 94, 0.4), inset 0 0 4px rgba(244, 63, 94, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(244, 63, 94, 0.8), inset 0 0 12px rgba(244, 63, 94, 0.3);
+  }
+}
+  
+  .room-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.dot-texto {
+  background: #a5b4fc;
+  color: #a5b4fc;
+}
+  .dot-multimedia {
+  background: #f472b6;
+  color: #f472b6;
+}
+
+.room-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+  color: var(--text-1);
+  font-family: monospace;
+}
+  .room-meta {
+  font-size: 0.85rem; 
+  color: var(--text-3);
+  padding: 0.5rem 0; 
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; 
+  }
   .meta-item strong { color: var(--text-2); }
 
-  .room-footer { display: flex; justify-content: space-between; align-items: center; }
+  .room-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
   .users-count {
     display: flex; align-items: center; gap: 0.35rem;
     font-size: 0.8rem; color: var(--text-3);
   }
-  .join-btn { padding: 0.5rem 1rem; font-size: 0.82rem; }
-
+  
+  .join-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
   /* States */
   .state-container { padding: 4rem 0; }
   .loading-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.25rem; }
@@ -531,4 +777,18 @@
     animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 600px) {
+  .header {
+    padding: 0.8rem 1rem;
+  }
+  .username {
+    display: none; /* Ocultamos el nombre, dejamos el avatar */
+  }
+  .header-brand span {
+    font-size: 0.85rem;
+    padding-left: 0.5em !important;
+  }
+}
 </style>
+
