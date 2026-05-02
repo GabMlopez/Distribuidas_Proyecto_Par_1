@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	maxFileSize = 10 << 20 // 10 MB
+	maxFileSize = 100 << 20 // Aumentado a 100 MB para PDFs/Documentos pesados
 	uploadDir   = "./uploads"
 )
 
@@ -49,22 +49,39 @@ func UploadFileHandler(c *gin.Context) {
 
 	// Validar tipo de archivo (opcional)
 	allowedTypes := map[string]bool{
+		// Imágenes
 		".jpg":  true,
 		".jpeg": true,
 		".png":  true,
 		".gif":  true,
+		".svg":  true,
+		".webp": true,
+		// Documentos
 		".pdf":  true,
 		".txt":  true,
-		".mp3":  true,
-		".mp4":  true,
 		".docx": true,
 		".doc":  true,
 		".xlsx": true,
 		".xls":  true,
 		".pptx": true,
 		".ppt":  true,
-		".zip":  true,
 		".csv":  true,
+		// Audio y Video
+		".mp3":  true,
+		".wav":  true,
+		".mp4":  true,
+		".avi":  true,
+		".mkv":  true,
+		".webm": true,
+		// Comprimidos
+		".zip": true,
+		".rar": true,
+		".7z":  true,
+		".tar": true,
+		".gz":  true,
+		// Otros datos
+		".json": true,
+		".xml":  true,
 	}
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
