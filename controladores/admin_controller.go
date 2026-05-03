@@ -5,6 +5,7 @@ import (
 	"chat_distribuido/modelos"
 	"crypto/rand"
 	"encoding/hex"
+	"html"
 	"net/http"
 	"strings"
 	"time"
@@ -46,13 +47,19 @@ func CreateSalasHandler(c *gin.Context) {
 		maxFileSize = 10 * 1024 * 1024 // 10MB
 	}
 
+	// Sanitizar nombre contra inyecciones XSS
+	nombreSeguro := req.Nombre
+	if nombreSeguro != "" {
+		nombreSeguro = html.EscapeString(nombreSeguro)
+	}
+
 	// Crear sala
 	sala := modelos.Sala{
 		SalaID:      salaID,
 		Pin:         req.Pin,
 		Tipo:        req.Tipo,
 		MaxFileSize: maxFileSize,
-		Nombre:      req.Nombre,
+		Nombre:      nombreSeguro,
 	}
 
 	// Guardar en MongoDB
@@ -129,6 +136,9 @@ func UpdateSalaHandler(c *gin.Context) {
 			return
 		}
 		update["max_file_size"] = *req.MaxFileSize
+	}
+	if req.Nombre != nil {
+		update["nombre"] = html.EscapeString(*req.Nombre)
 	}
 
 	// Agregar metadata de actualización

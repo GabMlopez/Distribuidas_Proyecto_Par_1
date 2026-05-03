@@ -7,6 +7,7 @@ import (
 	"chat_distribuido/utils"
 	"crypto/rand"
 	"encoding/hex"
+	"html"
 	"log"
 	"net/http"
 	"strconv"
@@ -162,8 +163,9 @@ func generarNicknameAutomatico(ctx *gin.Context, salaID string) string {
 }
 
 func procesarNickname(ctx *gin.Context, salaID string, nicknameSolicitado string, usuarioExistente *modelos.Usuario) (string, error) {
-	// Caso: Usuario proporciona nickname
+	// Sanitizar el nickname solicitado contra inyecciones HTML/XSS
 	if nicknameSolicitado != "" {
+		nicknameSolicitado = html.EscapeString(nicknameSolicitado)
 		if !verificarNicknameDisponible(ctx, salaID, nicknameSolicitado) {
 			return "", &NicknameError{Message: "El nickname '" + nicknameSolicitado + "' ya está en uso en esta sala"}
 		}
@@ -365,7 +367,12 @@ func DejarSalaHandler(c *gin.Context) {
 	}
 
 	result, err := collection.UpdateOne(c.Request.Context(),
-		bson.M{"usuario_id": req.UsuarioID, "sala_id": req.SalaID, "activo": true},
+		bson.M{
+			"usuario_id": req.UsuarioID, 
+			"sala_id": req.SalaID, 
+			"activo": true,
+			"ip": c.ClientIP(), // Mitigación de IDOR: validar que venga de la misma IP
+		},
 		update)
 
 	if err != nil || result.ModifiedCount == 0 {
@@ -393,7 +400,7 @@ func ActualizarNicknameHandler(c *gin.Context) {
 	collection := db.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
-			"nickname":    req.NicknameNuevo,
+			"nickname":    html.EscapeString(req.NicknameNuevo),
 			"last_active": time.Now(),
 		},
 	}
