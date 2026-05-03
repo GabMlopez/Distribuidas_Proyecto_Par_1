@@ -10,6 +10,8 @@ Esta rama está enfocada en el desarrollo y mejora de la interfaz de usuario (UX
   - Gestión avanzada de salas (edición y eliminación).
   - Mejoras en la interfaz de subida de archivos y vista previa.
   - Diseño responsivo para ocupar el 100% de la pantalla en dispositivos móviles y escritorio.
+* **Seguridad y Control de Acceso:**
+  - Uso estricto de **una sola sesión por dispositivo (IP)** para evitar conexiones duplicadas.
 * **Conexión con Backend:** Integración con el backend en Go a través de WebSockets para mensajería en tiempo real.
 
 ## Estructura de Directorios Clave
