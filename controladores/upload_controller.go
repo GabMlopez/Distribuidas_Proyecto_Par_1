@@ -91,8 +91,9 @@ func UploadFileHandler(c *gin.Context) {
 		return
 	}
 
-	// Generar nombre único
-	filename := fmt.Sprintf("%s_%s", salaID, header.Filename)
+	// Generar nombre único mitigando Path Traversal
+	safeHeaderName := filepath.Base(header.Filename)
+	filename := fmt.Sprintf("%s_%s", salaID, safeHeaderName)
 	filepath := filepath.Join(uploadDir, filename)
 
 	// Guardar archivo
@@ -132,7 +133,10 @@ func UploadFileHandler(c *gin.Context) {
 
 func GetFileHandler(c *gin.Context) {
 	filename := c.Param("filename")
-	filepath := filepath.Join(uploadDir, filename)
+	
+	// Mitigar Path Traversal: obtener solo el nombre base del archivo
+	safeFilename := filepath.Base(filename)
+	filepath := filepath.Join(uploadDir, safeFilename)
 
 	// Verificar si el archivo existe
 	if _, err := os.Stat(filepath); os.IsNotExist(err) {
