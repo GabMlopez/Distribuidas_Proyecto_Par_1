@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@source "../";
+
+@theme {
+  --color-bg-deep: #03050f;
+  --color-bg-surface: #070c1a;
+  
+  --animate-float: float 8s ease-in-out infinite;
+  --animate-fade-up: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-pulse-ring: pulseRing 3s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(15px, -20px) scale(1.03); }
+    66% { transform: translate(-10px, 10px) scale(0.97); }
+  }
+  @keyframes fadeUp {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseRing {
+    0% { box-shadow: 0 0 20px rgba(99,102,241,0.25), inset 0 1px 0 rgba(255,255,255,0.1); }
+    50% { box-shadow: 0 0 30px rgba(99,102,241,0.5), inset 0 1px 0 rgba(255,255,255,0.2); }
+    100% { box-shadow: 0 0 20px rgba(99,102,241,0.25), inset 0 1px 0 rgba(255,255,255,0.1); }
+  }
+}
+
+body {
+  background-color: var(--color-bg-deep);
+  color: #f1f5f9;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 15% 5%, rgba(99, 102, 241, 0.20) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 50% at 85% 90%, rgba(236, 72, 153, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 40% at 55% 35%, rgba(34, 211, 238, 0.10) 0%, transparent 50%);
+  pointer-events: none; z-index: 0;
+  animation: meshShift 20s ease-in-out infinite alternate;
+}
+
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 56px 56px;
+  pointer-events: none; z-index: 0;
+}
+
+@keyframes meshShift {
+  0%   { transform: scale(1) rotate(0deg); }
+  50%  { transform: scale(1.04) rotate(1deg); }
+  100% { transform: scale(1) rotate(-1deg); }
+}
+
+.app-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Scrollbar global styling */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(165,180,252,0.25); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(165,180,252,0.45); }

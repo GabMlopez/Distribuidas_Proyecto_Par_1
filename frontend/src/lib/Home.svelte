@@ -196,47 +196,48 @@
         <p>{isAdmin ? 'Crea una sala para comenzar.' : 'No hay salas activas en este momento.'}</p>
       </div>
     {:else}
-      <div class="rooms-grid">
+      <div class="rooms-grid-icons">
         {#each rooms as room, i}
-          <div class="room-card glass--card" style="animation-delay:{i*60}ms" class:anim-fade-up={true}>
-            <div class="room-top">
-              <div class="room-id">
-                <div class="room-dot dot-{room.tipo}"></div>
-                <code>{room.nombre || room.sala_id}</code>
-              </div>
-              <div class="room-top-actions">
+          <div class="room-icon-wrapper" style="animation-delay:{i*60}ms" class:anim-fade-up={true}>
+            <button class="room-icon-btn {room.tipo === 'multimedia' ? 'multimedia' : 'texto'}" on:click={() => openJoin(room)}>
+              {#if room.tipo === 'multimedia'}
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+              {:else}
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              {/if}
+            </button>
+            <div class="room-icon-label" title={room.nombre || room.sala_id}>{room.nombre || room.sala_id}</div>
+
+            <!-- Hover Info Card -->
+            <div class="room-hover-info">
+              <div class="room-hover-header">
+                <h4>{room.nombre || room.sala_id}</h4>
                 <span class="badge badge--{room.tipo}">{room.tipo}</span>
+              </div>
+              
+              <div class="room-hover-body">
+                <div class="users-count">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  {room.usuarios ?? 0} conectado{room.usuarios !== 1 ? 's' : ''}
+                </div>
+              </div>
+
+              <div class="room-hover-actions">
+                <button class="btn-primary btn-sm" on:click={() => openJoin(room)}>
+                  Unirse
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
                 {#if isAdmin}
-                  <div class="admin-actions">
+                  <div class="admin-actions-mini">
                     <button class="action-icon-btn edit" on:click={() => openEdit(room)} title="Editar">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
                     <button class="action-icon-btn delete" on:click={() => deleteRoom(room.sala_id)} title="Eliminar">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                     </button>
                   </div>
                 {/if}
               </div>
-            </div>
-
-            {#if isAdmin}
-              <div class="room-meta">
-                <div class="meta-item">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  PIN: <strong>{room.pin}</strong>
-                </div>
-              </div>
-            {/if}
-
-            <div class="room-footer">
-              <div class="users-count">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                {room.usuarios ?? 0} conectado{room.usuarios !== 1 ? 's' : ''}
-              </div>
-              <button class="btn-primary join-btn" on:click={() => openJoin(room)}>
-                Unirse
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-              </button>
             </div>
           </div>
         {/each}
@@ -421,22 +422,171 @@
 
   .icon-btn { padding: 0.6rem; border-radius: 8px; }
 
-  /* Grid */
-  .rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.25rem; }
-
-  .room-card {
-    padding: 1.5rem;
-    display: flex; flex-direction: column; gap: 1.25rem;
-    cursor: default;
+  /* Modern Icons Grid */
+  .rooms-grid-icons {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 2.5rem 1.5rem;
+    justify-items: center;
+    padding-top: 1rem;
   }
 
-  .room-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-  .room-id { display: flex; align-items: center; gap: 0.5rem; }
-  .room-top-actions { display: flex; align-items: center; gap: 0.75rem; }
-  .admin-actions { display: flex; gap: 0.4rem; padding-left: 0.5rem; border-left: 1px solid rgba(255,255,255,0.1); }
+  .room-icon-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .room-icon-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+
+  .room-icon-btn.texto {
+    color: var(--indigo-light);
+    background: rgba(99, 102, 241, 0.05);
+    border-color: rgba(99, 102, 241, 0.15);
+  }
+
+  .room-icon-btn.multimedia {
+    color: #f472b6;
+    background: rgba(244, 114, 182, 0.05);
+    border-color: rgba(244, 114, 182, 0.15);
+  }
+
+  .room-icon-wrapper:hover .room-icon-btn {
+    transform: translateY(-8px) scale(1.05);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .room-icon-wrapper:hover .room-icon-btn.texto {
+    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.25);
+    background: rgba(99, 102, 241, 0.15);
+  }
+
+  .room-icon-wrapper:hover .room-icon-btn.multimedia {
+    box-shadow: 0 12px 30px rgba(244, 114, 182, 0.25);
+    background: rgba(244, 114, 182, 0.15);
+  }
+
+  .room-icon-label {
+    font-size: 0.85rem;
+    color: var(--text-2);
+    font-weight: 500;
+    text-align: center;
+    max-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.2s;
+  }
   
+  .room-icon-wrapper:hover .room-icon-label {
+    color: var(--text-1);
+  }
+
+  /* Hover Info Tooltip */
+  .room-hover-info {
+    position: absolute;
+    bottom: calc(100% + 15px);
+    left: 50%;
+    transform: translateX(-50%) translateY(10px) scale(0.95);
+    background: rgba(10, 14, 28, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 1.25rem;
+    width: max-content;
+    min-width: 220px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .room-icon-wrapper:hover .room-hover-info {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0) scale(1);
+    pointer-events: auto;
+  }
+
+  .room-hover-info::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 8px;
+    border-style: solid;
+    border-color: rgba(255,255,255,0.15) transparent transparent transparent;
+  }
+
+  .room-hover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    gap: 1rem;
+  }
+
+  .room-hover-header h4 {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--text-1);
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .room-hover-body {
+    margin-bottom: 1.25rem;
+  }
+  
+  .users-count {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.85rem; color: var(--text-3);
+  }
+
+  .room-hover-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .btn-sm {
+    padding: 0.45rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .admin-actions-mini {
+    display: flex;
+    gap: 0.4rem;
+  }
+
   .action-icon-btn {
-    width: 28px; height: 28px; border-radius: 6px;
+    width: 32px; height: 32px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.1);
@@ -446,31 +596,6 @@
   .action-icon-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-1); }
   .action-icon-btn.edit:hover { border-color: var(--indigo); color: var(--indigo-light); }
   .action-icon-btn.delete:hover { border-color: var(--red); color: var(--red); }
-  
-  .room-id code {
-    font-size: 0.9rem; font-weight: 700;
-    background: rgba(255,255,255,0.06);
-    padding: 0.2rem 0.5rem; border-radius: 5px;
-    letter-spacing: 0.05em;
-  }
-  .room-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    flex-shrink: 0;
-    box-shadow: 0 0 6px currentColor;
-  }
-  .dot-texto     { background: var(--indigo-light); color: var(--indigo-light); }
-  .dot-multimedia{ background: #f472b6; color: #f472b6; }
-
-  .room-meta { font-size: 0.82rem; color: var(--text-3); }
-  .meta-item { display: flex; align-items: center; gap: 0.35rem; }
-  .meta-item strong { color: var(--text-2); }
-
-  .room-footer { display: flex; justify-content: space-between; align-items: center; }
-  .users-count {
-    display: flex; align-items: center; gap: 0.35rem;
-    font-size: 0.8rem; color: var(--text-3);
-  }
-  .join-btn { padding: 0.5rem 1rem; font-size: 0.82rem; }
 
   /* States */
   .state-container { padding: 4rem 0; }
