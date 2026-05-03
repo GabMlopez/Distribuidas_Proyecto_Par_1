@@ -42,12 +42,20 @@ export default function HomePage() {
   const [editPin, setEditPin] = useState('');
   const [updating, setUpdating] = useState(false);
 
+  const url = isAdmin ?  `${API}/admin/rooms`:`${API}/rooms/list`;
+
   const fetchRooms = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/rooms/list`);
+      const res = isAdmin ? await fetch(url, {
+        headers: { 'Authorization': `Bearer ${userContext.token}` }
+      }) : await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setRooms(data || []);
+        if (isAdmin) {
+            setRooms(data.salas || []); 
+        } else {
+            setRooms(Array.isArray(data) ? data : (data.salas || []));
+        }
       }
     } catch (e) {
       console.error('Error fetching rooms:', e);
@@ -74,7 +82,7 @@ export default function HomePage() {
   const createRoom = async () => {
     setCreating(true);
     try {
-      const res = await fetch(`${API}/rooms/create`, {
+      const res = await fetch(`${API}/admin/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userContext.token}` },
         body: JSON.stringify({ nombre: salanombre, tipo: newRoomType, pin: newRoomPin })
@@ -91,7 +99,7 @@ export default function HomePage() {
   const deleteRoom = async (id: string) => {
     if (!confirm('¿Seguro que deseas eliminar esta sala?')) return;
     try {
-      await fetch(`${API}/rooms/delete`, {
+      await fetch(`${API}/admin/rooms/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userContext.token}` },
         body: JSON.stringify({ sala_id: id })
@@ -104,10 +112,10 @@ export default function HomePage() {
     if (!editRoomRef) return;
     setUpdating(true);
     try {
-      await fetch(`${API}/rooms/update`, {
+      await fetch(`${API}/admin/rooms/${editRoomRef.sala_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userContext.token}` },
-        body: JSON.stringify({ sala_id: editRoomRef.sala_id, tipo: editType, pin: editPin })
+        body: JSON.stringify({ tipo: editType, pin: editPin })
       });
       setShowEditModal(false);
       fetchRooms();
@@ -192,7 +200,7 @@ export default function HomePage() {
             {isAdmin && <button className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/10 hover:border-white/20 transition-all" onClick={() => setShowCreateModal(true)}>Crear la primera sala</button>}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6 auto-rows-max p-2 pb-10">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-9 auto-rows-max p-2 pb-10">
             {rooms.map((room, index) => (
               <RoomCard
                 key={room.sala_id}

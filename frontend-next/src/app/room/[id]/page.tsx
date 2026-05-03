@@ -29,6 +29,8 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatBodyRef = useRef<HTMLDivElement>(null);
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   useEffect(() => {
     if (!userContext?.nickname) {
       router.push('/'); return;
@@ -127,7 +129,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     try {
       await fetch(`${API}/rooms/leave`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sala_id: roomId, nickname: userContext.nickname, device_id: userContext.deviceId })
+        body: JSON.stringify({ sala_id: roomId, usuario_id: userContext.userId})
       });
     } catch {}
     if (ws) ws.close();
@@ -142,57 +144,92 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   if (!userContext?.nickname) return null;
 
   return (
-    <div className="grid grid-cols-[270px_1fr] h-screen overflow-hidden">
+  <div className="flex h-screen overflow-hidden relative">
+    
+    {isSidebarOpen && (
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+        onClick={() => setIsSidebarOpen(false)}
+      />
+    )}
+
+    <aside className={`
+      fixed inset-y-0 left-0 z-50 w-[280px] bg-slate-950 transition-transform duration-300 ease-in-out transform
+      md:relative md:translate-x-0 md:z-auto
+      ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+    `}>
       <ChatSidebar 
         roomName={roomName} roomType={roomType} wsStatus={wsStatus} 
         users={users} uploads={uploads} myNickname={userContext.nickname} leaveRoom={leaveRoom} 
       />
-      <main className="flex flex-col overflow-hidden bg-slate-900/30">
-        <div className="flex justify-between items-center px-6 py-4 bg-slate-950/65 backdrop-blur-md border-b border-white/15 shrink-0">
+    </aside>
+
+    <main className="flex-1 flex flex-col min-w-0 bg-slate-900/30 overflow-hidden">
+      
+      <div className="flex justify-between items-center px-6 py-4 bg-slate-950/65 backdrop-blur-md border-b border-white/15 shrink-0">
+        <div className="flex items-center gap-3">
+        
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="md:hidden p-2 -ml-2 text-slate-400 hover:text-white transition-colors"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+
           <div className="flex items-center gap-2.5 text-[0.9rem]">
             <div className={`w-2 h-2 rounded-full shadow-[0_0_6px_currentColor] ${roomType === 'multimedia' ? 'bg-pink-400 text-pink-400' : 'bg-indigo-300 text-indigo-300'}`}></div>
-            <span><strong>{roomName}</strong></span>
-          </div>
-          <div className="text-[0.75rem] text-slate-500">{messages.length} mensajes</div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3" ref={chatBodyRef}>
-          {messages.length === 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500 opacity-70">
-              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              </div>
-              <p className="text-[0.85rem] m-0">Sé el primero en enviar un mensaje</p>
-            </div>
-          )}
-          {messages.map((msg, idx) => (
-            <ChatMessage key={idx} msg={msg} isOwn={msg.nickname === userContext.nickname} formatTime={formatTime} api={API} />
-          ))}
-        </div>
-
-        <div className="px-5 py-3.5 bg-slate-950/75 backdrop-blur-[20px] border-t border-white/15 flex items-center gap-2.5 shrink-0">
-          {roomType === 'multimedia' && (
-            <label className="w-10 h-10 shrink-0 rounded-xl bg-white/5 border border-white/15 flex items-center justify-center cursor-pointer text-slate-500 transition-all hover:bg-white/10 hover:text-slate-400 hover:border-white/30" title="Adjuntar archivos">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-              <input type="file" ref={fileInputRef} onChange={handleFilesSelected} multiple hidden />
-            </label>
-          )}
-          <div className="flex-1 flex items-center gap-2 bg-black/45 border border-white/20 rounded-2xl p-1.5 pl-4 transition-colors min-w-0 focus-within:border-indigo-300/50 focus-within:shadow-[0_0_12px_rgba(99,102,241,0.18)]">
-            <textarea
-              className="flex-1 bg-transparent border-none resize-none text-[0.9rem] py-1 max-h-[120px] leading-snug outline-none shadow-none text-slate-100 min-w-0 box-border"
-              value={currentMessage} onChange={e => setCurrentMessage(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Escribe un mensaje…" rows={1}
-            />
-            <button
-              className={`w-9 h-9 rounded-xl p-0 flex items-center justify-center shrink-0 transition-all duration-200 ease-out ${currentMessage.trim() ? 'bg-gradient-to-br from-indigo-500 to-purple-600 border-transparent text-white shadow-[0_4px_14px_rgba(99,102,241,0.4)] hover:scale-110' : 'bg-white/5 border border-white/10 text-slate-500 disabled:opacity-40 disabled:cursor-not-allowed'}`}
-              onClick={sendMessage} disabled={!currentMessage.trim() || wsStatus !== 'open'}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
+            <span className="truncate max-w-[150px] md:max-w-none"><strong>{roomName}</strong></span>
           </div>
         </div>
-      </main>
-    </div>
-  );
+
+        <div className="text-[0.75rem] text-slate-500 hidden sm:block">
+          {messages.length} mensajes
+        </div>
+      </div>
+
+      
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-3" ref={chatBodyRef}>
+        {messages.length === 0 && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500 opacity-70">
+            
+             <p className="text-[0.85rem]">Sé el primero en enviar un mensaje</p>
+          </div>
+        )}
+        {messages.map((msg, idx) => (
+          <ChatMessage key={idx} msg={msg} isOwn={msg.nickname === userContext.nickname} formatTime={formatTime} api={API} />
+        ))}
+      </div>
+
+     
+      <div className="px-4 py-3 md:px-5 md:py-3.5 bg-slate-950/75 backdrop-blur-[20px] border-t border-white/15 flex items-center gap-2.5 shrink-0">
+        {roomType === 'multimedia' && (
+          <label className="w-10 h-10 shrink-0 rounded-xl bg-white/5 border border-white/15 flex items-center justify-center cursor-pointer text-slate-500 hover:bg-white/10 transition-all">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <input type="file" ref={fileInputRef} onChange={handleFilesSelected} multiple hidden />
+          </label>
+        )}
+        
+        <div className="flex-1 flex items-center gap-2 bg-black/45 border border-white/20 rounded-2xl p-1.5 pl-4 focus-within:border-indigo-300/50 transition-all">
+          <textarea
+            className="flex-1 bg-transparent border-none resize-none text-[0.9rem] py-1 max-h-[120px] outline-none text-slate-100"
+            value={currentMessage}
+            onChange={e => setCurrentMessage(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            placeholder="Escribe un mensaje…"
+            rows={1}
+          />
+          <button
+            className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${currentMessage.trim() ? 'bg-indigo-600 text-white' : 'text-slate-500 opacity-50'}`}
+            onClick={sendMessage}
+            disabled={!currentMessage.trim() || wsStatus !== 'open'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+);
 }

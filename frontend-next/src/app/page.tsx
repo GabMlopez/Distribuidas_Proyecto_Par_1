@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
 
@@ -31,7 +31,7 @@ export default function LoginPage() {
         });
         const data = await res.json();
         if (res.ok) {
-          login(data.token, 'Admin');
+          login(data.token, 'Admin', data.usuario_id);
           router.push('/home');
         } else {
           setError(data.error || 'Credenciales incorrectas');
@@ -43,7 +43,7 @@ export default function LoginPage() {
       if (!nickname.trim()) {
         setError('El nickname es requerido');
       } else {
-        login(null, nickname.trim());
+        login(null, nickname.trim(), 'user_' + Math.random().toString(36).substring(2, 11));
         router.push('/home');
       }
     }

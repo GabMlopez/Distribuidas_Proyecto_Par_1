@@ -6,11 +6,12 @@ interface UserContextState {
   token: string | null;
   nickname: string;
   deviceId: string;
+  userId: string;
 }
 
 interface UserContextType {
   userContext: UserContextState;
-  login: (token: string | null, nickname: string) => void;
+  login: (token: string | null, nickname: string, userId: string) => void;
   logout: () => void;
 }
 
@@ -20,7 +21,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userContext, setUserContext] = useState<UserContextState>({
     token: null,
     nickname: '',
-    deviceId: ''
+    deviceId: '',
+    userId: ''
   });
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const login = (token: string | null, nickname: string) => {
+  const login = (token: string | null, nickname: string, userId: string) => {
     setUserContext(prev => ({ ...prev, token, nickname: nickname || 'Admin' }));
   };
 
@@ -38,7 +40,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setUserContext({
       token: null,
       nickname: '',
-      deviceId: 'dev_' + Math.random().toString(36).substring(2, 11)
+      deviceId: 'dev_' + Math.random().toString(36).substring(2, 11),
+      userId: ''
     });
   };
 
