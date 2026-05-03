@@ -10,6 +10,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Hub struct {
@@ -65,6 +66,9 @@ func (h *Hub) Run() {
 				}
 			}(client)
 			log.Printf("Cliente %s conectado a sala %s", client.Nickname, client.SalaId)
+
+			// Enviar historial de mensajes de la sala al nuevo cliente
+			go h.cargarHistorialSala(client)
 
 		case client := <-h.Desregistro:
 			h.mutex.Lock()
@@ -122,8 +126,39 @@ func (h *Hub) publishToRedis(msg Mensaje) {
 	if h.RedisClient == nil {
 		return
 	}
+
+	// Persistir solo mensajes de chat y multimedia en MongoDB
+	if msg.Tipo == "chat" || msg.Tipo == "multimedia" {
+		collection := db.GetCollection("mensajes")
+		_, err := collection.InsertOne(h.ctx, msg)
+		if err != nil {
+			log.Printf("Error persistiendo mensaje: %v", err)
+		}
+	}
+
 	payload, _ := json.Marshal(msg)
 	h.RedisClient.Publish(h.ctx, "chat_messages", payload)
+}
+
+func (h *Hub) cargarHistorialSala(client *Cliente) {
+	collection := db.GetCollection("mensajes")
+
+	// Obtener los últimos 50 mensajes de esta sala ordenados por tiempo
+	opts := options.Find().SetLimit(50).SetSort(bson.M{"timestamp": 1})
+	cursor, err := collection.Find(h.ctx, bson.M{"sala_id": client.SalaId}, opts)
+	if err != nil {
+		log.Printf("Error cargando historial de sala %s: %v", client.SalaId, err)
+		return
+	}
+	defer cursor.Close(h.ctx)
+
+	for cursor.Next(h.ctx) {
+		var msg Mensaje
+		if err := cursor.Decode(&msg); err == nil {
+			// Enviar directamente al canal de envío del cliente
+			client.Envio <- msg
+		}
+	}
 }
 
 func (h *Hub) listenRedis() {

@@ -2,29 +2,21 @@ package controladores
 
 import (
 	"chat_distribuido/controladores/sockets"
+	"chat_distribuido/db"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/minio/minio-go/v7"
 )
 
 const (
 	maxFileSize = 100 << 20 // Aumentado a 100 MB para PDFs/Documentos pesados
-	uploadDir   = "./uploads"
 )
-
-func init() {
-	// Crear directorio de uploads si no existe
-	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		os.MkdirAll(uploadDir, 0755)
-	}
-}
 
 func UploadFileHandler(c *gin.Context) {
 	// Obtener sala_id del contexto o query
@@ -94,19 +86,21 @@ func UploadFileHandler(c *gin.Context) {
 	// Generar nombre único mitigando Path Traversal
 	safeHeaderName := filepath.Base(header.Filename)
 	filename := fmt.Sprintf("%s_%s", salaID, safeHeaderName)
-	filepath := filepath.Join(uploadDir, filename)
 
-	// Guardar archivo
-	out, err := os.Create(filepath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar archivo"})
-		return
+	// Obtener tamaño del archivo y tipo de contenido
+	fileSize := header.Size
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
 	}
-	defer out.Close()
 
-	_, err = io.Copy(out, file)
+	// Subir archivo a MinIO
+	_, err = db.MinioClient.PutObject(c.Request.Context(), db.MinioBucket, filename, file, fileSize, minio.PutObjectOptions{
+		ContentType: contentType,
+	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al copiar archivo"})
+		log.Printf("Error subiendo archivo a MinIO: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al guardar archivo en el almacenamiento en la nube"})
 		return
 	}
 
@@ -134,15 +128,25 @@ func UploadFileHandler(c *gin.Context) {
 func GetFileHandler(c *gin.Context) {
 	filename := c.Param("filename")
 	
-	// Mitigar Path Traversal: obtener solo el nombre base del archivo
+	// Mitigar Path Traversal: obtener solo el nombre base
 	safeFilename := filepath.Base(filename)
-	filepath := filepath.Join(uploadDir, safeFilename)
 
-	// Verificar si el archivo existe
-	if _, err := os.Stat(filepath); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Archivo no encontrado"})
+	// Obtener el archivo desde MinIO
+	object, err := db.MinioClient.GetObject(c.Request.Context(), db.MinioBucket, safeFilename, minio.GetObjectOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error recuperando archivo"})
+		return
+	}
+	defer object.Close()
+
+	// Obtener información del objeto para saber su tamaño y Content-Type
+	objInfo, err := object.Stat()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Archivo no encontrado en MinIO"})
 		return
 	}
 
-	c.File(filepath)
+	c.DataFromReader(http.StatusOK, objInfo.Size, objInfo.ContentType, object, map[string]string{
+		"Content-Disposition": fmt.Sprintf("inline; filename=\"%s\"", safeFilename),
+	})
 }

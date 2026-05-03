@@ -22,6 +22,7 @@ func main() {
 
 	db.ConnectDB()
 	db.ConnectRedis()
+	db.ConnectMinio()
 	defer db.DisconnectDB()
 
 	// Limpiar usuarios fantasma de sesiones anteriores (útil en desarrollo)
@@ -35,6 +36,7 @@ func main() {
 
 	// Configurar router
 	r := gin.Default()
+	r.SetTrustedProxies(nil) // Fix: No confiar en todos los proxies por defecto (Seguridad)
 
 	// Configurar CORS
 	r.Use(func(c *gin.Context) {
