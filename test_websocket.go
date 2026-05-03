@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func main() {
+func TestWS() {
 	_ = godotenv.Load()
 	db.ConnectRedis()
 	db.ConnectDB()

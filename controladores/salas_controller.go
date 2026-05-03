@@ -101,7 +101,7 @@ func buscarDispositivoExistente(ctx *gin.Context, deviceID string) (*modelos.Usu
 	return &usuario, nil
 }
 
-func desactivarSalaAnterior(ctx *gin.Context, deviceID string, salaAnterior string) error {
+func desactivarSalaAnterior(ctx *gin.Context, deviceID string) error {
 	collection := db.GetCollection("usuarios")
 	_, err := collection.UpdateOne(ctx.Request.Context(),
 		bson.M{"device_id": deviceID},
@@ -255,7 +255,7 @@ func UnirseSalaHandler(c *gin.Context) {
 		previousRoom = usuarioExistente.SalaID
 
 		if usuarioExistente.Activo && usuarioExistente.SalaID != req.SalaID {
-			desactivarSalaAnterior(c, req.DeviceID, usuarioExistente.SalaID)
+			desactivarSalaAnterior(c, req.DeviceID)
 		}
 
 		nickname, err = procesarNickname(c, req.SalaID, req.Nickname, usuarioExistente)

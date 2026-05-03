@@ -180,7 +180,14 @@
   }
 </script>
 {#if showSidebar}
-  <div class="sidebar-overlay" on:click={toggleSidebar}></div>
+  <div 
+    class="sidebar-overlay" 
+    on:click={toggleSidebar} 
+    on:keydown={(e) => e.key === 'Escape' && toggleSidebar()} 
+    role="button" 
+    tabindex="0" 
+    aria-label="Cerrar menú lateral"
+  ></div>
 {/if}
 
 
@@ -256,7 +263,7 @@
   <main class="chat-area">
     <!-- Chat header -->
     <div class="chat-header">
-      <button class="menu-toggle" on:click={toggleSidebar}>
+      <button class="menu-toggle" on:click={toggleSidebar} aria-label="Abrir menú lateral">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <div class="chat-title">
@@ -344,6 +351,7 @@
           class:active={currentMessage.trim()}
           on:click={sendMessage}
           disabled={!currentMessage.trim() || wsStatus !== 'open'}
+          aria-label="Enviar mensaje"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
