@@ -49,6 +49,14 @@ func main() {
 		c.Next()
 	})
 
+	// Configurar Security Headers (CSP, X-Frame-Options, X-Content-Type-Options)
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none';")
+		c.Writer.Header().Set("X-Frame-Options", "DENY")
+		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+		c.Next()
+	})
+
 	// Rutas públicas
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "OK"})
