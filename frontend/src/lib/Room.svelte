@@ -172,6 +172,12 @@
   }
 
   function isOwn(msg) { return msg.nickname === userContext.nickname; }
+
+  function isImage(url) {
+    if (!url) return false;
+    const lowerUrl = url.toLowerCase();
+    return lowerUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)(\?.*)?$/) != null;
+  }
 </script>
 {#if showSidebar}
   <div class="sidebar-overlay" on:click={toggleSidebar}></div>
@@ -288,6 +294,11 @@
               {#if !isOwn(msg)}<span class="bubble-sender">{msg.nickname}</span>{/if}
               <p>{msg.texto}</p>
               {#if msg.file_url}
+                {#if isImage(msg.file_url)}
+                  <div class="image-preview">
+                    <img src={API + msg.file_url} alt="Imagen adjunta" loading="lazy" />
+                  </div>
+                {/if}
                 <a href={API + msg.file_url} target="_blank" class="file-chip">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   Descargar archivo
@@ -527,6 +538,23 @@
     margin-top: 0.2rem;
   }
   .file-chip:hover { background: rgba(236,72,153,0.25); }
+
+  .image-preview {
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .image-preview img {
+    max-width: 100%;
+    max-height: 250px;
+    object-fit: contain;
+    display: block;
+    border-radius: 8px;
+  }
 
   /* Input bar */
   .chat-input-bar {
