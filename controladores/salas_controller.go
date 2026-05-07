@@ -83,28 +83,15 @@ func (e *CapacityError) Error() string {
 	return e.Message
 }
 
-// buscarDispositivoExistente busca un dispositivo por su ID
-func buscarDispositivoExistente(ctx *gin.Context, deviceID string) (*modelos.Usuario, error) {
+// buscarDispositivoExistente busca un dispositivo activo por su IP
+func buscarDispositivoExistente(ctx *gin.Context, ip string) (*modelos.Usuario, error) {
 	var usuario modelos.Usuario
 	collection := db.GetCollection("usuarios")
-	err := collection.FindOne(ctx.Request.Context(), bson.M{"device_id": deviceID}).Decode(&usuario)
+	err := collection.FindOne(ctx.Request.Context(), bson.M{"ip": ip, "activo": true}).Decode(&usuario)
 	if err != nil {
 		return nil, err
 	}
 	return &usuario, nil
-}
-
-func desactivarSalaAnterior(ctx *gin.Context, deviceID string, salaAnterior string) error {
-	collection := db.GetCollection("usuarios")
-	_, err := collection.UpdateOne(ctx.Request.Context(),
-		bson.M{"device_id": deviceID},
-		bson.M{
-			"$set": bson.M{
-				"activo":  false,
-				"left_at": time.Now(),
-			},
-		})
-	return err
 }
 
 // actualizarUsuarioSala actualiza un usuario existente a una nueva sala
@@ -233,7 +220,8 @@ func UnirseSalaHandler(c *gin.Context) {
 		return
 	}
 
-	usuarioExistente, _ := buscarDispositivoExistente(c, req.DeviceID)
+	// Bloqueo estricto por IP Local (1 dispositivo físico = 1 sesión activa)
+	usuarioExistente, _ := buscarDispositivoExistente(c, c.ClientIP())
 
 	var usuarioID string
 	var nickname string
@@ -246,8 +234,9 @@ func UnirseSalaHandler(c *gin.Context) {
 		usuarioID = usuarioExistente.UsuarioID
 		previousRoom = usuarioExistente.SalaID
 
-		if usuarioExistente.Activo && usuarioExistente.SalaID != req.SalaID {
-			desactivarSalaAnterior(c, req.DeviceID, usuarioExistente.SalaID)
+		if usuarioExistente.Activo {
+			c.JSON(http.StatusConflict, gin.H{"error": "Ya tienes una sesión abierta en este dispositivo. Cierra las otras pestañas/ventanas para continuar."})
+			return
 		}
 
 		nickname, err = procesarNickname(c, req.SalaID, req.Nickname, usuarioExistente)

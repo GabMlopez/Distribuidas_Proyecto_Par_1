@@ -176,6 +176,11 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* DEBUG DEVICE ID */}
+      <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-red-500/80 backdrop-blur text-white px-4 py-1.5 rounded-full text-xs font-mono z-50 border border-red-400">
+        Device ID: {userContext?.deviceId}
+      </div>
+
       <main className="flex-1 max-w-[1200px] w-full mx-auto relative z-10 flex flex-col">
         <div className="flex justify-between items-center mb-8 shrink-0">
           <h2 className="text-2xl font-bold text-slate-100">Explorar Salas</h2>

@@ -42,7 +42,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     setWsStatus('connecting');
     const wsProtocol = API.startsWith('https') ? 'wss' : 'ws';
     const wsHost = API.replace(/^https?:\/\//, '');
-    const url = `${wsProtocol}://${wsHost}/ws/${roomId}?nickname=${encodeURIComponent(userContext.nickname)}&sala_id=${roomId}`;
+    const url = `${wsProtocol}://${wsHost}/ws/${roomId}?nickname=${encodeURIComponent(userContext.nickname)}&sala_id=${roomId}&device_id=${userContext.deviceId}`;
     
     const websocket = new WebSocket(url);
     websocket.onopen = () => setWsStatus('open');

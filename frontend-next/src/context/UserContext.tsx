@@ -26,23 +26,74 @@ export function UserProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    setUserContext(prev => ({
-      ...prev,
-      deviceId: 'dev_' + Math.random().toString(36).substring(2, 11)
-    }));
+    const fetchDeviceId = async () => {
+      try {
+        // Generar una Huella de Hardware (Hard Fingerprint) estricta
+        // Esto NO depende del almacenamiento del navegador, por lo que será idéntico en Incógnito.
+        let hardwareInfo = '';
+        
+        // 1. Extraer el modelo exacto de la Tarjeta Gráfica (GPU) mediante WebGL
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                const debugInfo = (gl as any).getExtension('WEBGL_debug_renderer_info');
+                const vendor = debugInfo ? (gl as any).getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'unk_v';
+                const renderer = debugInfo ? (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'unk_r';
+                hardwareInfo += `${vendor}_${renderer}_`;
+            }
+        } catch (e) {}
+
+        // 2. Extraer CPU, Memoria RAM y Sistema Operativo
+        const cores = navigator.hardwareConcurrency || 'unk_c';
+        const ram = (navigator as any).deviceMemory || 'unk_m';
+        const platform = navigator.platform || 'unk_p';
+        
+        // 3. Extraer Resolución de Pantalla y Profundidad de Color
+        const screen = `${window.screen.width}x${window.screen.height}_${window.screen.colorDepth}`;
+
+        // Unir toda la información del hardware físico
+        hardwareInfo += `${cores}_${ram}_${platform}_${screen}`;
+
+        // Convertir la cadena de hardware en un Hash numérico simple (32-bit)
+        let hash = 0;
+        for (let i = 0; i < hardwareInfo.length; i++) {
+            const char = hardwareInfo.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+
+        const finalDeviceId = `hw_${Math.abs(hash)}`;
+        console.log("Hardware Fingerprint:", hardwareInfo);
+        console.log("Device ID Final:", finalDeviceId);
+
+        setUserContext(prev => ({
+          ...prev,
+          deviceId: finalDeviceId
+        }));
+      } catch (error) {
+        console.error("Error generando Hardware Fingerprint", error);
+        setUserContext(prev => ({
+          ...prev,
+          deviceId: 'dev_' + Math.random().toString(36).substring(2, 11)
+        }));
+      }
+    };
+    fetchDeviceId();
   }, []);
 
   const login = (token: string | null, nickname: string, userId: string) => {
-    setUserContext(prev => ({ ...prev, token, nickname: nickname || 'Admin' }));
+    setUserContext(prev => ({ ...prev, token, nickname: nickname || 'Admin', userId }));
   };
 
   const logout = () => {
-    setUserContext({
+    setUserContext(prev => ({
+      ...prev,
       token: null,
       nickname: '',
-      deviceId: 'dev_' + Math.random().toString(36).substring(2, 11),
       userId: ''
-    });
+      // No cambiamos el deviceId al hacer logout porque sigue siendo la misma máquina
+    }));
   };
 
   return (

@@ -19,18 +19,20 @@ var upgrader = websocket.Upgrader{
 func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 	nickname := c.Query("nickname")
 	salaID := c.Query("sala_id")
+	deviceID := c.Query("device_id")
 
-	if nickname == "" || salaID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nickname y sala_id requeridos"})
+	if nickname == "" || salaID == "" || deviceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nickname, sala_id y device_id requeridos"})
 		return
 	}
 
 	// Validar que el usuario tenga acceso a la sala
 	collection := db.GetCollection("usuarios")
 	count, err := collection.CountDocuments(c.Request.Context(), bson.M{
-		"sala_id":  salaID,
-		"nickname": nickname,
-		"activo":   true,
+		"sala_id":   salaID,
+		"nickname":  nickname,
+		"device_id": deviceID,
+		"activo":    true,
 	})
 
 	if err != nil || count == 0 {
@@ -50,6 +52,7 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		Envio:    make(chan sockets.Mensaje, 256),
 		Nickname: nickname,
 		SalaId:   salaID,
+		DeviceId: deviceID,
 		Ip:       c.ClientIP(),
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
@@ -68,6 +69,21 @@ func (h *Hub) Run() {
 				if _, ok := clients[client]; ok {
 					delete(clients, client)
 					close(client.Envio)
+
+					// Marcar como inactivo en MongoDB
+					collection := db.GetCollection("usuarios")
+					_, err := collection.UpdateOne(h.ctx,
+						bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
+						bson.M{
+							"$set": bson.M{
+								"activo":      false,
+								"left_at":     time.Now(),
+								"last_active": time.Now(),
+							},
+						})
+					if err != nil {
+						log.Printf("Error marcando usuario %s como inactivo: %v", client.Nickname, err)
+					}
 
 					// Si la sala queda vacía, la eliminamos
 					if len(clients) == 0 {
