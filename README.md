@@ -1,4 +1,4 @@
-# Sistema de Chat Distribuido - Rama `desarrollo-ux`
+# Sistema de Chat Distribuido 
 
 ## Descripción
 Esta rama está enfocada en el desarrollo y mejora de la interfaz de usuario (UX/UI) y la experiencia del cliente para el Sistema de Chat Distribuido. 
