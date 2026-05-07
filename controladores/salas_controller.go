@@ -7,8 +7,6 @@ import (
 	"chat_distribuido/utils"
 	"crypto/rand"
 	"encoding/hex"
-	"html"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -50,11 +48,6 @@ type RoomResponse struct {
 	Nombre   string `json:"nombre,omitempty"`
 }
 
-type UserLeaveRequest struct {
-	UsuarioID string `json:"usuario_id,omitempty"`
-	SalaID    string `json:"sala_id"`
-}
-
 func validarSalaYPin(ctx *gin.Context, salaID, pin string) (*modelos.Sala, error) {
 	var sala modelos.Sala
 	collection := db.GetCollection("salas")
@@ -90,28 +83,15 @@ func (e *CapacityError) Error() string {
 	return e.Message
 }
 
-// buscarDispositivoExistente busca un dispositivo por su ID
-func buscarDispositivoExistente(ctx *gin.Context, deviceID string) (*modelos.Usuario, error) {
+// buscarDispositivoExistente busca un dispositivo activo por su IP
+func buscarDispositivoExistente(ctx *gin.Context, ip string) (*modelos.Usuario, error) {
 	var usuario modelos.Usuario
 	collection := db.GetCollection("usuarios")
-	err := collection.FindOne(ctx.Request.Context(), bson.M{"device_id": deviceID}).Decode(&usuario)
+	err := collection.FindOne(ctx.Request.Context(), bson.M{"ip": ip, "activo": true}).Decode(&usuario)
 	if err != nil {
 		return nil, err
 	}
 	return &usuario, nil
-}
-
-func desactivarSalaAnterior(ctx *gin.Context, deviceID string) error {
-	collection := db.GetCollection("usuarios")
-	_, err := collection.UpdateOne(ctx.Request.Context(),
-		bson.M{"device_id": deviceID},
-		bson.M{
-			"$set": bson.M{
-				"activo":  false,
-				"left_at": time.Now(),
-			},
-		})
-	return err
 }
 
 // actualizarUsuarioSala actualiza un usuario existente a una nueva sala
@@ -163,9 +143,8 @@ func generarNicknameAutomatico(ctx *gin.Context, salaID string) string {
 }
 
 func procesarNickname(ctx *gin.Context, salaID string, nicknameSolicitado string, usuarioExistente *modelos.Usuario) (string, error) {
-	// Sanitizar el nickname solicitado contra inyecciones HTML/XSS
+	// Caso: Usuario proporciona nickname
 	if nicknameSolicitado != "" {
-		nicknameSolicitado = html.EscapeString(nicknameSolicitado)
 		if !verificarNicknameDisponible(ctx, salaID, nicknameSolicitado) {
 			return "", &NicknameError{Message: "El nickname '" + nicknameSolicitado + "' ya está en uso en esta sala"}
 		}
@@ -241,7 +220,8 @@ func UnirseSalaHandler(c *gin.Context) {
 		return
 	}
 
-	usuarioExistente, _ := buscarDispositivoExistente(c, req.DeviceID)
+	// Bloqueo estricto por IP Local (1 dispositivo físico = 1 sesión activa)
+	usuarioExistente, _ := buscarDispositivoExistente(c, c.ClientIP())
 
 	var usuarioID string
 	var nickname string
@@ -254,8 +234,9 @@ func UnirseSalaHandler(c *gin.Context) {
 		usuarioID = usuarioExistente.UsuarioID
 		previousRoom = usuarioExistente.SalaID
 
-		if usuarioExistente.Activo && usuarioExistente.SalaID != req.SalaID {
-			desactivarSalaAnterior(c, req.DeviceID)
+		if usuarioExistente.Activo {
+			c.JSON(http.StatusConflict, gin.H{"error": "Ya tienes una sesión abierta en este dispositivo. Cierra las otras pestañas/ventanas para continuar."})
+			return
 		}
 
 		nickname, err = procesarNickname(c, req.SalaID, req.Nickname, usuarioExistente)
@@ -350,9 +331,10 @@ func getActiveUsersInRoom(ctx *gin.Context, salaID string) []map[string]string {
 }
 
 func DejarSalaHandler(c *gin.Context) {
-	var req UserLeaveRequest
-
-	log.Println("\nRecibida solicitud para dejar sala:", req)
+	var req struct {
+		UsuarioID string `json:"usuario_id" binding:"required"`
+		SalaID    string `json:"sala_id" binding:"required"`
+	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
@@ -362,17 +344,17 @@ func DejarSalaHandler(c *gin.Context) {
 	collection := db.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
-			"activo": false,
+			"activo":      false,
+			"left_at":     time.Now(),
+			"last_active": time.Now(),
+		},
+		"$inc": bson.M{
+			"total_visits": 1,
 		},
 	}
 
 	result, err := collection.UpdateOne(c.Request.Context(),
-		bson.M{
-			"usuario_id": req.UsuarioID, 
-			"sala_id": req.SalaID, 
-			"activo": true,
-			"ip": c.ClientIP(), // Mitigación de IDOR: validar que venga de la misma IP
-		},
+		bson.M{"usuario_id": req.UsuarioID, "sala_id": req.SalaID},
 		update)
 
 	if err != nil || result.ModifiedCount == 0 {
@@ -400,7 +382,7 @@ func ActualizarNicknameHandler(c *gin.Context) {
 	collection := db.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
-			"nickname":    html.EscapeString(req.NicknameNuevo),
+			"nickname":    req.NicknameNuevo,
 			"last_active": time.Now(),
 		},
 	}

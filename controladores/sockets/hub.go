@@ -10,7 +10,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Hub struct {
@@ -52,9 +51,6 @@ func (h *Hub) Run() {
 			h.Salas[client.SalaId][client] = true
 			h.mutex.Unlock()
 
-			// Registrar en Redis la sala activa del usuario con una caducidad por seguridad (ej. 24h)
-			h.RedisClient.Set(h.ctx, "user_active_room:"+client.Nickname, client.SalaId, 24*time.Hour)
-
 			h.notifyUserList(client.SalaId)
 			// Notificar que alguien se unió
 			go func(c *Cliente) {
@@ -67,26 +63,26 @@ func (h *Hub) Run() {
 			}(client)
 			log.Printf("Cliente %s conectado a sala %s", client.Nickname, client.SalaId)
 
-			// Enviar historial de mensajes de la sala al nuevo cliente
-			go h.cargarHistorialSala(client)
-
 		case client := <-h.Desregistro:
 			h.mutex.Lock()
-
-			// Determinar si este usuario tiene otras conexiones en esta u otras salas
-			userTieneMasConexiones := false
-
 			if clients, ok := h.Salas[client.SalaId]; ok {
 				if _, ok := clients[client]; ok {
 					delete(clients, client)
 					close(client.Envio)
 
-					// Verificar si el usuario aún tiene otra conexión en esta sala
-					for c := range clients {
-						if c.Nickname == client.Nickname {
-							userTieneMasConexiones = true
-							break
-						}
+					// Marcar como inactivo en MongoDB
+					collection := db.GetCollection("usuarios")
+					_, err := collection.UpdateOne(h.ctx,
+						bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
+						bson.M{
+							"$set": bson.M{
+								"activo":      false,
+								"left_at":     time.Now(),
+								"last_active": time.Now(),
+							},
+						})
+					if err != nil {
+						log.Printf("Error marcando usuario %s como inactivo: %v", client.Nickname, err)
 					}
 
 					// Si la sala queda vacía, la eliminamos
@@ -96,11 +92,6 @@ func (h *Hub) Run() {
 				}
 			}
 			h.mutex.Unlock()
-
-			// Eliminar registro de sala en Redis solo si ya no tiene conexiones activas
-			if !userTieneMasConexiones {
-				h.RedisClient.Del(h.ctx, "user_active_room:"+client.Nickname)
-			}
 
 			// Notificar usuarios actualizados
 			h.notifyUserList(client.SalaId)
@@ -126,39 +117,8 @@ func (h *Hub) publishToRedis(msg Mensaje) {
 	if h.RedisClient == nil {
 		return
 	}
-
-	// Persistir solo mensajes de chat y multimedia en MongoDB
-	if msg.Tipo == "chat" || msg.Tipo == "multimedia" {
-		collection := db.GetCollection("mensajes")
-		_, err := collection.InsertOne(h.ctx, msg)
-		if err != nil {
-			log.Printf("Error persistiendo mensaje: %v", err)
-		}
-	}
-
 	payload, _ := json.Marshal(msg)
 	h.RedisClient.Publish(h.ctx, "chat_messages", payload)
-}
-
-func (h *Hub) cargarHistorialSala(client *Cliente) {
-	collection := db.GetCollection("mensajes")
-
-	// Obtener los últimos 50 mensajes de esta sala ordenados por tiempo
-	opts := options.Find().SetLimit(50).SetSort(bson.M{"timestamp": 1})
-	cursor, err := collection.Find(h.ctx, bson.M{"sala_id": client.SalaId}, opts)
-	if err != nil {
-		log.Printf("Error cargando historial de sala %s: %v", client.SalaId, err)
-		return
-	}
-	defer cursor.Close(h.ctx)
-
-	for cursor.Next(h.ctx) {
-		var msg Mensaje
-		if err := cursor.Decode(&msg); err == nil {
-			// Enviar directamente al canal de envío del cliente
-			client.Envio <- msg
-		}
-	}
 }
 
 func (h *Hub) listenRedis() {

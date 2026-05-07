@@ -20,6 +20,7 @@ type Cliente struct {
 	Envio    chan Mensaje
 	Nickname string
 	SalaId   string
+	DeviceId string
 	Ip       string
 }
 
