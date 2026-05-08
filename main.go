@@ -53,9 +53,15 @@ func main() {
 
 	// Configurar Security Headers (CSP, X-Frame-Options, X-Content-Type-Options)
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none';")
-		c.Writer.Header().Set("X-Frame-Options", "DENY")
-		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+		// Permitir específicamente tu frontend en Vercel
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "https://distribuidas-proyecto-par-1-dm2g8ebrs.vercel.app/")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
 		c.Next()
 	})
 
