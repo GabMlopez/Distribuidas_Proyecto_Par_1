@@ -33,6 +33,35 @@ services:
     healthCheckPath: /health
     domains:
       - chat-api.onrender.com
+  - type: web
+    name: minio
+    runtime: image
+    repo: https://github.com/render-examples/minio
+    plan: starter
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: MINIO_ROOT_USER
+        value: minioadmin # O usa sync: false para ponerlo manualmente
+      - key: MINIO_ROOT_PASSWORD
+        generateValue: true
+    disks:
+      - name: minio-data
+        mountPath: /data
+        sizeGB: 10
 
-  # MinIO Storage (usar servicio externo o self-hosted)
-  # Nota: Render no tiene servicio de MinIO, puedes usar Cloudinary o mantener archivos locales
+  # Servicio de la Consola Web de MinIO (Opcional)
+  - type: web
+    name: minio-console
+    runtime: image
+    repo: https://github.com/render-examples/minio
+    plan: starter
+    dockerContext: .
+    dockerfilePath: ./Dockerfile.console
+    envVars:
+      - key: MINIO_SERVER_URL
+        value: https://minio.onrender.com # La URL de tu servicio API
+      - key: MINIO_ROOT_USER
+        sync: false
+      - key: MINIO_ROOT_PASSWORD
+        sync: false
