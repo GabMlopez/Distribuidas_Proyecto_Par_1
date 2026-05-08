@@ -1,0 +1,38 @@
+services:
+  # Backend API
+  - type: web
+    name: chat-backend
+    runtime: image
+    repo: https://github.com/tu-usuario/chat-distribuido
+    branch: main
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: GIN_MODE
+        value: release
+      - key: MONGODB_URI
+        sync: false  # Configurar manualmente en Render Dashboard
+      - key: REDIS_URL
+        sync: false
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_BUCKET
+        value: chat-uploads
+      - key: MINIO_USE_SSL
+        value: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MAX_FILE_SIZE
+        value: 10485760
+    healthCheckPath: /health
+    domains:
+      - chat-api.onrender.com
+
+  # MinIO Storage (usar servicio externo o self-hosted)
+  # Nota: Render no tiene servicio de MinIO, puedes usar Cloudinary o mantener archivos locales
