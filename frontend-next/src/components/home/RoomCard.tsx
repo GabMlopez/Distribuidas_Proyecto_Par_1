@@ -4,10 +4,10 @@ import { Room } from '@/types';
 interface Props {
   room: Room;
   index: number;
+  isAdmin: boolean;
   openJoin: (room: Room) => void;
   openEdit: (room: Room) => void;
-  deleteRoom: (id: string) => void;
-  isAdmin: boolean;
+  deleteRoom: (room: Room) => void;
 }
 
 export function RoomCard({ room, index, openJoin, openEdit, deleteRoom, isAdmin }: Props) {
@@ -17,7 +17,7 @@ export function RoomCard({ room, index, openJoin, openEdit, deleteRoom, isAdmin 
     <div 
       className="relative group animate-fade-up hover:z-50" 
       style={{ animationDelay: `${index * 60}ms` }}
-      // En PC se abre con hover, en móvil/clic alternamos con el estado
+      
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
@@ -88,7 +88,7 @@ export function RoomCard({ room, index, openJoin, openEdit, deleteRoom, isAdmin 
               </button>
               <button 
                 className="w-7 h-7 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center hover:bg-rose-500/20" 
-                onClick={(e) => { e.stopPropagation(); deleteRoom(room.sala_id); }}
+                onClick={() => deleteRoom(room)} 
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>

@@ -13,6 +13,7 @@ interface UserContextType {
   userContext: UserContextState;
   login: (token: string | null, nickname: string, userId: string) => void;
   logout: () => void;
+  setUserId: (userId: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -64,8 +65,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
 
         const finalDeviceId = `hw_${Math.abs(hash)}`;
-        console.log("Hardware Fingerprint:", hardwareInfo);
-        console.log("Device ID Final:", finalDeviceId);
 
         setUserContext(prev => ({
           ...prev,
@@ -96,8 +95,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  return (
-    <UserContext.Provider value={{ userContext, login, logout }}>
+  const setUserId = (userId: string) => {
+    setUserContext(prev => ({ ...prev, userId }));
+    sessionStorage.setItem('user_id', userId);  
+  };
+
+   return (
+    <UserContext.Provider value={{ userContext, login, logout, setUserId }}>
       {children}
     </UserContext.Provider>
   );

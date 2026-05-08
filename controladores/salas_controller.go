@@ -7,8 +7,10 @@ import (
 	"chat_distribuido/utils"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +28,7 @@ func SetHub(h *sockets.Hub) {
 type JoinRoomRequest struct {
 	SalaID   string `json:"sala_id" binding:"required"`
 	Pin      string `json:"pin" binding:"required"`
-	Nickname string `json:"nickname"` // Opcional
+	Nickname string `json:"nickname"`
 	DeviceID string `json:"device_id" binding:"required"`
 }
 
@@ -81,6 +83,32 @@ type CapacityError struct {
 
 func (e *CapacityError) Error() string {
 	return e.Message
+}
+
+// getRealIP obtiene la IP real del cliente considerando proxies
+func getRealIP(c *gin.Context) string {
+	// Verificar X-Forwarded-For (para proxies/load balancers)
+	xForwardedFor := c.GetHeader("X-Forwarded-For")
+	if xForwardedFor != "" {
+		// Tomar la primera IP de la lista
+		ips := strings.Split(xForwardedFor, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	xRealIP := c.GetHeader("X-Real-IP")
+	if xRealIP != "" {
+		return xRealIP
+	}
+
+	ip := c.ClientIP()
+
+	if ip == "::1" {
+		ip = "127.0.0.1"
+	}
+
+	return ip
 }
 
 // buscarDispositivoExistente busca un dispositivo activo por su IP
@@ -220,26 +248,31 @@ func UnirseSalaHandler(c *gin.Context) {
 		return
 	}
 
-	// Bloqueo estricto por IP Local (1 dispositivo físico = 1 sesión activa)
-	usuarioExistente, _ := buscarDispositivoExistente(c, c.ClientIP())
-
+	var usuarioExistente modelos.Usuario
+	err = db.GetCollection("usuarios").FindOne(c.Request.Context(),
+		bson.M{"device_id": req.DeviceID}).Decode(&usuarioExistente)
+	fmt.Printf("=== DEPURACIÓN UNIRSE SALA ===\nDeviceID: %s\nError búsqueda usuario: %v\n", req.DeviceID, err)
 	var usuarioID string
 	var nickname string
 	var isNewUser bool
 	var previousRoom string
 
-	if usuarioExistente != nil {
-		// usuario existe
+	if err == nil {
+		// Dispositivo existe
 		isNewUser = false
 		usuarioID = usuarioExistente.UsuarioID
 		previousRoom = usuarioExistente.SalaID
 
-		if usuarioExistente.Activo {
-			c.JSON(http.StatusConflict, gin.H{"error": "Ya tienes una sesión abierta en este dispositivo. Cierra las otras pestañas/ventanas para continuar."})
+		// Verificar si ya está activo en otra sala
+		if usuarioExistente.Activo && usuarioExistente.SalaID != "" && usuarioExistente.SalaID != req.SalaID {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Ya tienes una sesión activa en la sala: " + usuarioExistente.SalaID + ". Por favor, sal de esa sala primero.",
+			})
 			return
 		}
 
-		nickname, err = procesarNickname(c, req.SalaID, req.Nickname, usuarioExistente)
+		// Procesar nickname
+		nickname, err = procesarNickname(c, req.SalaID, req.Nickname, &usuarioExistente)
 		if err != nil {
 			if nicknameErr, ok := err.(*NicknameError); ok {
 				c.JSON(http.StatusConflict, gin.H{"error": nicknameErr.Message})
@@ -249,15 +282,28 @@ func UnirseSalaHandler(c *gin.Context) {
 			return
 		}
 
-		if err := actualizarUsuarioSala(c, req.DeviceID, req.SalaID, nickname, c.ClientIP()); err != nil {
+		// Actualizar usuario
+		update := bson.M{
+			"$set": bson.M{
+				"sala_id":     req.SalaID,
+				"nickname":    nickname,
+				"activo":      true,
+				"ip":          getRealIP(c),
+				"last_active": time.Now(),
+			},
+		}
+		_, err = db.GetCollection("usuarios").UpdateOne(c.Request.Context(),
+			bson.M{"device_id": req.DeviceID}, update)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error actualizando usuario"})
 			return
 		}
 
-	} else {
-		// nuevo usuario
+	} else if err == mongo.ErrNoDocuments {
+		// Nuevo dispositivo
 		isNewUser = true
 
+		// Procesar nickname
 		nickname, err = procesarNickname(c, req.SalaID, req.Nickname, nil)
 		if err != nil {
 			if nicknameErr, ok := err.(*NicknameError); ok {
@@ -268,14 +314,30 @@ func UnirseSalaHandler(c *gin.Context) {
 			return
 		}
 
-		nuevoUsuario, err := crearNuevoUsuario(c, req.SalaID, req.DeviceID, nickname, c.ClientIP())
+		usuarioID = generateUserID()
+		usuario := modelos.Usuario{
+			UsuarioID:  usuarioID,
+			Nickname:   nickname,
+			SalaID:     req.SalaID,
+			DeviceID:   req.DeviceID,
+			Activo:     true,
+			IP:         getRealIP(c),
+			CreatedAt:  time.Now(),
+			LastActive: time.Now(),
+		}
+
+		_, err = db.GetCollection("usuarios").InsertOne(c.Request.Context(), usuario)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error registrando usuario"})
 			return
 		}
-		usuarioID = nuevoUsuario.UsuarioID
+
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error buscando usuario"})
+		return
 	}
 
+	// Generar token
 	token, err := utils.GenerarTokenUser(usuarioID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generando token"})
@@ -300,7 +362,6 @@ func UnirseSalaHandler(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
-
 func getActiveUsersInRoom(ctx *gin.Context, salaID string) []map[string]string {
 	collection := db.GetCollection("usuarios")
 
@@ -341,23 +402,31 @@ func DejarSalaHandler(c *gin.Context) {
 		return
 	}
 
+	println("=== DEPURACIÓN DEJAR SALA ===")
+	println("UsuarioID recibido:", req.UsuarioID)
+	println("SalaID recibida:", req.SalaID)
+	println("Longitud del ID:", len(req.UsuarioID))
+
 	collection := db.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
 			"activo":      false,
+			"sala_id":     "",
 			"left_at":     time.Now(),
 			"last_active": time.Now(),
-		},
-		"$inc": bson.M{
-			"total_visits": 1,
 		},
 	}
 
 	result, err := collection.UpdateOne(c.Request.Context(),
-		bson.M{"usuario_id": req.UsuarioID, "sala_id": req.SalaID},
+		bson.M{"usuario_id": req.UsuarioID},
 		update)
 
-	if err != nil || result.ModifiedCount == 0 {
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "El usuario no se encuentra en esa sala"})
+		return
+	}
+
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al salir de la sala"})
 		return
 	}

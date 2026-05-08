@@ -7,12 +7,13 @@ export interface Room {
 }
 
 export interface ChatMessage {
-  tipo: 'chat' | 'join' | 'leave' | 'multimedia' | 'user_list';
-  texto: string;
+  type?: string;      
+  tipo?: string;      
+  texto?: string;
   nickname?: string;
   timestamp?: number;
   file_url?: string;
-  users?: string[];
+  file_type?: string;
 }
 
 export interface UploadTask {

@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const API = 'http://localhost:8080';
+  const API = process.env.NEXT_PUBLIC_API_URL ;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

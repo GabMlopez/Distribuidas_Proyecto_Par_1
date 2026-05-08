@@ -8,12 +8,13 @@ import { RoomCard } from '@/components/home/RoomCard';
 import { CreateRoomModal } from '@/components/home/CreateRoomModal';
 import { JoinRoomModal } from '@/components/home/JoinRoomModal';
 import { EditRoomModal } from '@/components/home/EditRoomModal';
+import { DeleteModal } from '@/components/home/DeleteRoomModal'; // Importar el modal
 
-const API = 'http://localhost:8080';
+const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function HomePage() {
   const router = useRouter();
-  const { userContext, logout } = useUser();
+  const { userContext, logout, setUserId } = useUser();
   const isAdmin = userContext?.nickname === 'Admin';
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -23,6 +24,7 @@ export default function HomePage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false); // Nuevo estado
 
   // Estados Crear Sala
   const [salanombre, setSalanombre] = useState('');
@@ -38,11 +40,17 @@ export default function HomePage() {
 
   // Estados Editar
   const [editRoomRef, setEditRoomRef] = useState<Room | null>(null);
+  const [editNombre, setEditNombre] = useState('');
   const [editType, setEditType] = useState<'texto' | 'multimedia'>('texto');
   const [editPin, setEditPin] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  const url = isAdmin ?  `${API}/admin/rooms`:`${API}/rooms/list`;
+  // Estados Eliminar
+  const [deleteRoomRef, setDeleteRoomRef] = useState<Room | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const url = isAdmin ? `${API}/admin/rooms` : `${API}/rooms/list`;
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -52,9 +60,9 @@ export default function HomePage() {
       if (res.ok) {
         const data = await res.json();
         if (isAdmin) {
-            setRooms(data.salas || []); 
+          setRooms(data.salas || []);
         } else {
-            setRooms(Array.isArray(data) ? data : (data.salas || []));
+          setRooms(Array.isArray(data) ? data : (data.salas || []));
         }
       }
     } catch (e) {
@@ -62,7 +70,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdmin, url, userContext.token]);
 
   useEffect(() => {
     if (!userContext?.nickname) {
@@ -73,6 +81,18 @@ export default function HomePage() {
     const interval = setInterval(fetchRooms, 3000);
     return () => clearInterval(interval);
   }, [userContext, fetchRooms, router]);
+
+  // Validar cambios en edición
+  useEffect(() => {
+    if (editRoomRef) {
+      const pinChanged = editPin !== '' && editPin !== editRoomRef.pin;
+      const typeChanged = editType !== editRoomRef.tipo;
+      const nombreChanged = editNombre !== '' && editNombre !== editRoomRef.nombre;
+      setHasChanges(pinChanged || typeChanged || nombreChanged);
+    } else {
+      setHasChanges(false);
+    }
+  }, [editPin, editType, editNombre, editRoomRef]);
 
   const handleLogout = () => {
     logout();
@@ -89,43 +109,105 @@ export default function HomePage() {
       });
       if (res.ok) {
         setShowCreateModal(false);
-        setSalanombre(''); setNewRoomPin('');
+        setSalanombre('');
+        setNewRoomPin('');
         fetchRooms();
       }
-    } catch {}
-    setCreating(false);
+    } catch (error) {
+      console.error('Error creating room:', error);
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const deleteRoom = async (id: string) => {
-    if (!confirm('¿Seguro que deseas eliminar esta sala?')) return;
+  const openDeleteModal = (room: Room) => {
+    setDeleteRoomRef(room);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRoomRef) return;
+    
+    setDeleting(true);
     try {
-      await fetch(`${API}/admin/rooms/${id}`, {
+      const res = await fetch(`${API}/admin/rooms/${deleteRoomRef.sala_id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userContext.token}` },
-        body: JSON.stringify({ sala_id: id })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userContext.token}` }
       });
-      fetchRooms();
-    } catch {}
+      
+      if (res.ok) {
+        setShowDeleteModal(false);
+        setDeleteRoomRef(null);
+        fetchRooms();
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Error al eliminar la sala');
+      }
+    } catch (error) {
+      console.error('Error deleting room:', error);
+      alert('Error de conexión al eliminar la sala');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const updateRoom = async () => {
     if (!editRoomRef) return;
+    
+    if (!hasChanges) {
+      alert('No hay cambios para guardar');
+      return;
+    }
+    
+    if (editPin && (editPin.length < 4 || editPin.length > 6)) {
+      alert('El PIN debe tener entre 4 y 6 dígitos');
+      return;
+    }
+    
     setUpdating(true);
     try {
-      await fetch(`${API}/admin/rooms/${editRoomRef.sala_id}`, {
+      const updateData: { pin?: string; tipo?: string; nombre?: string } = {};
+      
+      if (editPin && editPin !== editRoomRef.pin) {
+        updateData.pin = editPin;
+      }
+      if (editType !== editRoomRef.tipo) {
+        updateData.tipo = editType;
+      }
+      if (editNombre && editNombre !== editRoomRef.nombre) {
+        updateData.nombre = editNombre;
+      }
+      
+      const res = await fetch(`${API}/admin/rooms/${editRoomRef.sala_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${userContext.token}` },
-        body: JSON.stringify({ tipo: editType, pin: editPin })
+        body: JSON.stringify(updateData)
       });
-      setShowEditModal(false);
-      fetchRooms();
-    } catch {}
-    setUpdating(false);
+      
+      if (res.ok) {
+        setShowEditModal(false);
+        setEditRoomRef(null);
+        setEditPin('');
+        setEditNombre('');
+        setEditType('texto');
+        setHasChanges(false);
+        fetchRooms();
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Error al actualizar la sala');
+      }
+    } catch (error) {
+      console.error('Error updating room:', error);
+      alert('Error de conexión al actualizar la sala');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const joinRoom = async () => {
     if (!selectedRoom) return;
-    setJoinError(''); setJoining(true);
+    setJoinError('');
+    setJoining(true);
     try {
       const res = await fetch(`${API}/rooms/join`, {
         method: 'POST',
@@ -139,9 +221,12 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (res.ok) {
+        const backendUserId = data.usuario_id;
         sessionStorage.setItem('room_token', data.token);
         sessionStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
         sessionStorage.setItem('room_type', selectedRoom.tipo);
+        sessionStorage.setItem('user_id', backendUserId);
+        setUserId(backendUserId);
         router.push(`/room/${selectedRoom.sala_id}`);
       } else {
         setJoinError(data.error || 'PIN incorrecto');
@@ -152,10 +237,20 @@ export default function HomePage() {
     setJoining(false);
   };
 
+  const openEditModal = (room: Room) => {
+    setEditRoomRef(room);
+    setEditNombre(room.nombre || '');
+    setEditType(room.tipo);
+    setEditPin('');
+    setHasChanges(false);
+    setShowEditModal(true);
+  };
+
   if (!userContext?.nickname) return null;
 
   return (
     <div className="min-h-screen flex flex-col p-5 md:p-8 relative">
+      
       <header className="flex justify-between items-center px-6 py-4 bg-slate-900/40 backdrop-blur-xl border border-white/15 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] mb-8 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-pink-500/10 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
@@ -176,10 +271,6 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* DEBUG DEVICE ID */}
-      <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-red-500/80 backdrop-blur text-white px-4 py-1.5 rounded-full text-xs font-mono z-50 border border-red-400">
-        Device ID: {userContext?.deviceId}
-      </div>
 
       <main className="flex-1 max-w-[1200px] w-full mx-auto relative z-10 flex flex-col">
         <div className="flex justify-between items-center mb-8 shrink-0">
@@ -191,6 +282,7 @@ export default function HomePage() {
           )}
         </div>
 
+        {/* Lista de salas */}
         {loading ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 opacity-70">
             <div className="w-8 h-8 border-4 border-white/20 border-t-indigo-400 rounded-full animate-spin"></div>
@@ -199,10 +291,17 @@ export default function HomePage() {
         ) : rooms.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-5 opacity-70">
             <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="9" y1="3" x2="9" y2="21"/>
+              </svg>
             </div>
             <p className="text-slate-400">No hay salas disponibles.</p>
-            {isAdmin && <button className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/10 hover:border-white/20 transition-all" onClick={() => setShowCreateModal(true)}>Crear la primera sala</button>}
+            {isAdmin && (
+              <button className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/10 hover:border-white/20 transition-all" onClick={() => setShowCreateModal(true)}>
+                Crear la primera sala
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-9 auto-rows-max p-2 pb-10">
@@ -213,14 +312,15 @@ export default function HomePage() {
                 index={index}
                 isAdmin={isAdmin}
                 openJoin={(r) => { setSelectedRoom(r); setJoinPin(''); setJoinError(''); setShowJoinModal(true); }}
-                openEdit={(r) => { setEditRoomRef(r); setEditType(r.tipo); setEditPin(''); setShowEditModal(true); }}
-                deleteRoom={deleteRoom}
+                openEdit={openEditModal}
+                deleteRoom={openDeleteModal} 
               />
             ))}
           </div>
         )}
       </main>
 
+      {/* Modales */}
       <CreateRoomModal
         show={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -247,14 +347,37 @@ export default function HomePage() {
 
       <EditRoomModal
         show={showEditModal}
-        onClose={() => setShowEditModal(false)}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditRoomRef(null);
+          setEditPin('');
+          setEditNombre('');
+          setHasChanges(false);
+        }}
         selectedRoomId={editRoomRef?.sala_id || ''}
+        selectedRoomNombre={editRoomRef?.nombre || ''}
+        editNombre={editNombre}
+        setEditNombre={setEditNombre}
         editPin={editPin}
         setEditPin={setEditPin}
         editType={editType}
         setEditType={setEditType}
         updateRoom={updateRoom}
         updating={updating}
+        hasChanges={hasChanges}
+      />
+
+      
+      <DeleteModal
+        show={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setDeleteRoomRef(null);
+        }}
+        onConfirm={confirmDelete}
+        roomName={deleteRoomRef?.nombre || deleteRoomRef?.sala_id || ''}
+        roomId={deleteRoomRef?.sala_id || ''}
+        deleting={deleting}
       />
     </div>
   );
