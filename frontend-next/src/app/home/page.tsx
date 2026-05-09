@@ -14,8 +14,8 @@ const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function HomePage() {
   const router = useRouter();
-  const { userContext, logout, setUserId } = useUser();
-  const isAdmin = userContext?.nickname === 'Admin';
+  const { userContext, logout, setUserId, login } = useUser();
+  const isAdmin = userContext.isAdmin;
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export default function HomePage() {
       return;
     }
     fetchRooms();
-    const interval = setInterval(fetchRooms, 3000);
+    const interval = setInterval(fetchRooms, 5000);
     return () => clearInterval(interval);
   }, [userContext, fetchRooms, router]);
 

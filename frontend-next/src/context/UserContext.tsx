@@ -7,11 +7,12 @@ interface UserContextState {
   nickname: string;
   deviceId: string;
   userId: string;
+  isAdmin: boolean;
 }
 
 interface UserContextType {
   userContext: UserContextState;
-  login: (token: string | null, nickname: string, userId: string) => void;
+  login: (token: string | null, nickname: string, userId: string, isAdmin: boolean) => void;
   logout: () => void;
   setUserId: (userId: string) => void;
 }
@@ -23,7 +24,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     token: null,
     nickname: '',
     deviceId: '',
-    userId: ''
+    userId: '',
+    isAdmin: false
   });
 
   useEffect(() => {
@@ -68,21 +70,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         setUserContext(prev => ({
           ...prev,
-          deviceId: finalDeviceId
+          deviceId: finalDeviceId,
+          isAdmin: true
         }));
       } catch (error) {
         console.error("Error generando Hardware Fingerprint", error);
         setUserContext(prev => ({
           ...prev,
-          deviceId: 'dev_' + Math.random().toString(36).substring(2, 11)
+          deviceId: 'dev_' + Math.random().toString(36).substring(2, 11),
+          isAdmin: true  
         }));
       }
     };
     fetchDeviceId();
   }, []);
 
-  const login = (token: string | null, nickname: string, userId: string) => {
-    setUserContext(prev => ({ ...prev, token, nickname: nickname || 'Admin', userId }));
+  const login = (token: string | null, nickname: string, userId: string, isAdmin: boolean) => {
+    setUserContext(prev => ({ ...prev, token, nickname: nickname , userId, isAdmin }));
   };
 
   const logout = () => {
@@ -90,8 +94,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       ...prev,
       token: null,
       nickname: '',
-      userId: ''
-      // No cambiamos el deviceId al hacer logout porque sigue siendo la misma máquina
+      userId: '',
+      isAdmin: false
     }));
   };
 

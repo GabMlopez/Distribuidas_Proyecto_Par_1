@@ -82,15 +82,20 @@ export function EditRoomModal({
 
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-semibold text-slate-400">
-            Nuevo PIN (opcional)
+            Nuevo PIN (opcional - solo números)
             <span className="text-slate-500 ml-1">4-6 dígitos</span>
           </label>
           <input 
             type="text" 
             value={editPin} 
-            onChange={e => setEditPin(e.target.value)} 
+            onChange={e => {
+              const onlyNumbers = e.target.value.replace(/\D/g, '');
+              setEditPin(onlyNumbers);
+            }} 
             placeholder="Dejar vacío para no cambiar" 
             maxLength={6} 
+            inputMode="numeric"  
+            pattern="[0-9]*"     
             className={`w-full p-3 bg-black/40 border rounded-xl text-slate-100 placeholder:text-slate-500 focus:ring-4 transition-all outline-none box-border ${
               editPin && !isPinValid 
                 ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' 

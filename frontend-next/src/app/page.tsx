@@ -31,7 +31,8 @@ export default function LoginPage() {
         });
         const data = await res.json();
         if (res.ok) {
-          login(data.token, 'Admin', data.usuario_id);
+          login(data.token, 'Admin', data.usuario_id,true);
+          console.log("admin here")
           router.push('/home');
         } else {
           setError(data.error || 'Credenciales incorrectas');
@@ -43,7 +44,8 @@ export default function LoginPage() {
       if (!nickname.trim()) {
         setError('El nickname es requerido');
       } else {
-        login(null, nickname.trim(), 'user_' + Math.random().toString(36).substring(2, 11));
+        login(null, nickname.trim(), 'user_' + Math.random().toString(36).substring(2, 11),false);
+        console.log("admin here not")
         router.push('/home');
       }
     }

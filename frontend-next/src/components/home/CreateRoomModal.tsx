@@ -66,15 +66,24 @@ export function CreateRoomModal({ show, onClose, salanombre, setSalanombre, newR
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-slate-400">PIN de acceso</label>
+          <label className="text-xs font-semibold text-slate-400">PIN de acceso (solo números)</label>
           <input 
             type="text" 
             value={newRoomPin} 
-            onChange={e => setNewRoomPin(e.target.value)} 
+            onChange={e => {
+              const onlyNumbers = e.target.value.replace(/\D/g, '');
+              setNewRoomPin(onlyNumbers);
+            }} 
             placeholder="Mínimo 4 dígitos" 
             maxLength={6} 
+            inputMode="numeric"  
+            pattern="[0-9]*"    
             className="w-full p-3 bg-black/40 border border-white/20 rounded-xl text-slate-100 placeholder:text-slate-500 focus:border-indigo-400 focus:bg-indigo-500/10 focus:ring-4 focus:ring-indigo-500/20 transition-all outline-none box-border" 
           />
+
+          {newRoomPin.length > 0 && newRoomPin.length < 6 && (
+            <p className="text-xs text-amber-400">El PIN debe tener al menos 4 dígitos</p>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 mt-2">
