@@ -18,33 +18,11 @@ export function ChatMessage({ msg, isOwn, formatTime, api }: ChatMessageProps) {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
 
-  // Si es mensaje de sistema
-  if (msg.tipo === 'system' || msg.type === 'system') {
+  // Si es mensaje de sistema, mostrar componente especial
+  if (msg.type === 'system' || msg.tipo === 'system') {
     return (
       <SystemMessage 
         text={msg.texto || ''} 
-        timestamp={msg.timestamp} 
-        formatTime={formatTime} 
-      />
-    );
-  }
-
-  // Si es mensaje de join
-  if (msg.tipo === 'join' || msg.type === 'join') {
-    return (
-      <SystemMessage 
-        text={msg.texto || `${msg.nickname} se ha unido a la sala`} 
-        timestamp={msg.timestamp} 
-        formatTime={formatTime} 
-      />
-    );
-  }
-
-  // Si es mensaje de leave
-  if (msg.tipo === 'leave' || msg.type === 'leave') {
-    return (
-      <SystemMessage 
-        text={msg.texto || `${msg.nickname} ha salido de la sala`} 
         timestamp={msg.timestamp} 
         formatTime={formatTime} 
       />
@@ -57,8 +35,30 @@ export function ChatMessage({ msg, isOwn, formatTime, api }: ChatMessageProps) {
   const isImage = fileUrl && /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(fileUrl);
   const isPDF = fileUrl && /\.pdf$/i.test(fileUrl);
 
-  const fullImageUrl = fileUrl ? (fileUrl.startsWith('http') ? fileUrl : `${api}${fileUrl}`) : '';
+  const fullImageUrl = fileUrl ? `${api}${fileUrl}` : '';
 
+  // Si es mensaje de join/leave antiguo (por si acaso)
+  if (msg.tipo === 'join' || msg.type === 'join') {
+    return (
+      <SystemMessage 
+        text={msg.texto || `${msg.nickname} se ha unido a la sala`} 
+        timestamp={msg.timestamp} 
+        formatTime={formatTime} 
+      />
+    );
+  }
+
+  if (msg.tipo === 'leave' || msg.type === 'leave') {
+    return (
+      <SystemMessage 
+        text={msg.texto || `${msg.nickname} ha salido de la sala`} 
+        timestamp={msg.timestamp} 
+        formatTime={formatTime} 
+      />
+    );
+  }
+
+  // Resto del código para mensajes normales...
   return (
     <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} animate-fade-in`}>
       <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
