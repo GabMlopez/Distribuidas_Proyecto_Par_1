@@ -79,6 +79,12 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 	err := collection.FindOne(c.Request.Context(), bson.M{
 		"sala_id":   salaID,
 		"device_id": deviceID,
+	})
+
+	if err != nil || count == 0 {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No tienes acceso a esta sala o el nickname no está activo"})
+		return
+	}
 	}).Decode(&usuario)
 
 	clientIP := c.ClientIP()

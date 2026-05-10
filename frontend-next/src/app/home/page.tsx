@@ -60,9 +60,9 @@ export default function HomePage() {
       if (res.ok) {
         const data = await res.json();
         if (isAdmin) {
-          setRooms(data.salas || []);
+          setRooms(data?.salas || []);
         } else {
-          setRooms(Array.isArray(data) ? data : (data.salas || []));
+          setRooms(Array.isArray(data) ? data : (data?.salas || []));
         }
       }
     } catch (e) {

@@ -57,6 +57,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Hidratación controlada post-render
+    setUserContext(prev => ({
+      ...prev,
+      token: sessionStorage.getItem('token'),
+      nickname: sessionStorage.getItem('nickname') || '',
+      deviceId: sessionStorage.getItem('deviceId') || '',
+      userId: sessionStorage.getItem('userId') || '',
+      isAdmin: sessionStorage.getItem('isAdmin') === 'true'
+    }));
+  }, []);
+
+  useEffect(() => {
     const fetchDeviceId = async () => {
       try {
         let hardwareInfo = '';
@@ -133,6 +145,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
       userId: '',
       isAdmin: false
     }));
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('nickname');
+    sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('isAdmin');
+    sessionStorage.removeItem('room_name');
+    sessionStorage.removeItem('room_type');
+    sessionStorage.removeItem('room_token');
   };
 
   const setUserId = (userId: string) => {

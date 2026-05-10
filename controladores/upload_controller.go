@@ -95,6 +95,11 @@ func UploadFileHandler(c *gin.Context) {
 	}
 
 	// Subir archivo a MinIO
+	if db.MinioClient == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "El servicio de almacenamiento no está disponible actualmente. El archivo no se pudo subir."})
+		return
+	}
+
 	_, err = db.MinioClient.PutObject(c.Request.Context(), db.MinioBucket, filename, file, fileSize, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
@@ -130,6 +135,11 @@ func GetFileHandler(c *gin.Context) {
 	
 	// Mitigar Path Traversal: obtener solo el nombre base
 	safeFilename := filepath.Base(filename)
+
+	if db.MinioClient == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Servicio de almacenamiento no disponible"})
+		return
+	}
 
 	// Obtener el archivo desde MinIO
 	object, err := db.MinioClient.GetObject(c.Request.Context(), db.MinioBucket, safeFilename, minio.GetObjectOptions{})

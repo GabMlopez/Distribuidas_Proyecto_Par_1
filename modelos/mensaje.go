@@ -4,7 +4,7 @@ import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type Mensaje struct {
 	Id        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	MensajeID string             `bson:"administrador_id" json:"administrador_id"`
+	MensajeID string             `bson:"mensaje_id,omitempty" json:"mensaje_id,omitempty"`
 	Nickname  string             `bson:"nickname" json:"nickname"`
 	SalaID    string             `bson:"sala_id" json:"sala_id"`
 	Tipo      string             `bson:"tipo" json:"tipo"`

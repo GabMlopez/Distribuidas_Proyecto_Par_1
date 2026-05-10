@@ -253,10 +253,13 @@ func UnirseSalaHandler(c *gin.Context) {
 	// === CAPA 1: Verificar en Redis si esta IP ya tiene sesión activa ===
 	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+clientIP).Result()
 	if errRedis == nil && activeSession != "" {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
-		})
-		return
+		expectedSession := req.Nickname + "|" + req.SalaID
+		if activeSession != expectedSession {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Este dispositivo ya tiene una sesión activa en otra sala o con otro usuario.",
+			})
+			return
+		}
 	}
 
 	// === CAPA 2: Verificar en MongoDB si esta IP ya tiene un usuario activo ===
@@ -264,13 +267,15 @@ func UnirseSalaHandler(c *gin.Context) {
 	errIP := db.GetCollection("usuarios").FindOne(c.Request.Context(),
 		bson.M{"ip": clientIP, "activo": true}).Decode(&usuarioActivoPorIP)
 	if errIP == nil {
-		// Ya existe un usuario activo con esta IP - BLOQUEAR
-		fmt.Printf("BLOQUEO SESIÓN DUPLICADA: IP=%s ya activa como '%s' en sala '%s'\n",
-			clientIP, usuarioActivoPorIP.Nickname, usuarioActivoPorIP.SalaID)
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
-		})
-		return
+		if usuarioActivoPorIP.Nickname != req.Nickname || usuarioActivoPorIP.SalaID != req.SalaID {
+			// Ya existe un usuario activo con esta IP - BLOQUEAR
+			fmt.Printf("BLOQUEO SESIÓN DUPLICADA: IP=%s ya activa como '%s' en sala '%s'\n",
+				clientIP, usuarioActivoPorIP.Nickname, usuarioActivoPorIP.SalaID)
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Este dispositivo ya tiene una sesión activa en otra sala o con otro usuario.",
+			})
+			return
+		}
 	}
 
 	var usuarioExistente modelos.Usuario
@@ -288,8 +293,8 @@ func UnirseSalaHandler(c *gin.Context) {
 		usuarioID = usuarioExistente.UsuarioID
 		previousRoom = usuarioExistente.SalaID
 
-		// Verificar si ya está activo en cualquier sala (misma o diferente)
-		if usuarioExistente.Activo && usuarioExistente.SalaID != "" {
+		// Verificar si ya está activo en OTRA sala
+		if usuarioExistente.Activo && usuarioExistente.SalaID != "" && usuarioExistente.SalaID != req.SalaID {
 			c.JSON(http.StatusConflict, gin.H{
 				"error": "Ya tienes una sesión activa en la sala: " + usuarioExistente.SalaID + ". Cierra esa sesión primero.",
 			})
@@ -446,6 +451,10 @@ func DejarSalaHandler(c *gin.Context) {
 		bson.M{"usuario_id": req.UsuarioID},
 		update)
 
+	// Limpiar sesión en Redis si existe
+	clientIP := getRealIP(c)
+	db.RedisClient.Del(c.Request.Context(), "device_active_session:"+clientIP)
+
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "El usuario no se encuentra en esa sala"})
 		return
@@ -528,7 +537,7 @@ func ListaSalas(c *gin.Context) {
 		return
 	}
 
-	var response []RoomResponse
+	response := make([]RoomResponse, 0)
 	for _, sala := range salas {
 		response = append(response, RoomResponse{
 			SalaID:   sala.SalaID,
@@ -545,4 +554,43 @@ func generateUserID() string {
 	bytes := make([]byte, 8)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
+}
+
+func GetMessagesHandler(c *gin.Context) {
+	roomId := c.Param("roomId")
+	if roomId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "roomId es requerido"})
+		return
+	}
+
+	collection := db.GetCollection("mensajes")
+	// Obtener los últimos 100 mensajes, ordenados por timestamp ascendente
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "timestamp", Value: -1}})
+	findOptions.SetLimit(100)
+
+	cursor, err := collection.Find(c.Request.Context(), bson.M{"sala_id": roomId}, findOptions)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error obteniendo mensajes"})
+		return
+	}
+	defer cursor.Close(c.Request.Context())
+
+	var mensajes []modelos.Mensaje
+	if err = cursor.All(c.Request.Context(), &mensajes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando mensajes"})
+		return
+	}
+
+	// Como los obtuvimos ordenados descendentemente (para tener los más recientes),
+	// los invertimos para devolverlos en orden cronológico ascendente.
+	for i, j := 0, len(mensajes)-1; i < j; i, j = i+1, j-1 {
+		mensajes[i], mensajes[j] = mensajes[j], mensajes[i]
+	}
+
+	if mensajes == nil {
+		mensajes = make([]modelos.Mensaje, 0)
+	}
+
+	c.JSON(http.StatusOK, mensajes)
 }
