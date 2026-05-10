@@ -1,8 +1,8 @@
-package controladores
+package handlers
 
 import (
-	"chat_distribuido/db"
-	"chat_distribuido/modelos"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/models"
 	"crypto/rand"
 	"encoding/hex"
 	"html"
@@ -26,7 +26,7 @@ type UpdateSalaRequest struct {
 // CreateSalasHandler - Crear sala (requiere autenticación)
 func CreateSalasHandler(c *gin.Context) {
 
-	var req modelos.CreateRoomRequest
+	var req models.CreateRoomRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos: " + err.Error()})
 		return
@@ -54,7 +54,7 @@ func CreateSalasHandler(c *gin.Context) {
 	}
 
 	// Crear sala
-	sala := modelos.Sala{
+	sala := models.Sala{
 		SalaID:      salaID,
 		Pin:         req.Pin,
 		Tipo:        req.Tipo,
@@ -63,7 +63,7 @@ func CreateSalasHandler(c *gin.Context) {
 	}
 
 	// Guardar en MongoDB
-	collection := db.GetCollection("salas")
+	collection := repository.GetCollection("salas")
 	_, err := collection.InsertOne(c.Request.Context(), sala)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creando la sala"})
@@ -102,8 +102,8 @@ func UpdateSalaHandler(c *gin.Context) {
 	}
 
 	// Buscar la sala
-	collection := db.GetCollection("salas")
-	var sala modelos.Sala
+	collection := repository.GetCollection("salas")
+	var sala models.Sala
 	err := collection.FindOne(c.Request.Context(), bson.M{"sala_id": roomID}).Decode(&sala)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -199,7 +199,7 @@ func DeleteSalaHandler(c *gin.Context) {
 	}
 
 	// Eliminar la sala
-	collection := db.GetCollection("salas")
+	collection := repository.GetCollection("salas")
 	result, err := collection.DeleteOne(c.Request.Context(), bson.M{"sala_id": roomID})
 
 	if err != nil {
@@ -213,7 +213,7 @@ func DeleteSalaHandler(c *gin.Context) {
 	}
 
 	// Eliminar también todos los usuarios de la sala en la BD
-	usuariosCollection := db.GetCollection("usuarios")
+	usuariosCollection := repository.GetCollection("usuarios")
 	usuariosCollection.DeleteMany(c.Request.Context(), bson.M{"sala_id": roomID})
 
 	c.JSON(http.StatusOK, gin.H{
@@ -230,7 +230,7 @@ func GetAllSalasAdmin(c *gin.Context) {
 		return
 	}
 
-	collection := db.GetCollection("salas")
+	collection := repository.GetCollection("salas")
 	cursor, err := collection.Find(c.Request.Context(), bson.M{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error obteniendo salas"})
@@ -238,7 +238,7 @@ func GetAllSalasAdmin(c *gin.Context) {
 	}
 	defer cursor.Close(c.Request.Context())
 
-	salas := make([]modelos.Sala, 0)
+	salas := make([]models.Sala, 0)
 	if err = cursor.All(c.Request.Context(), &salas); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando salas"})
 		return

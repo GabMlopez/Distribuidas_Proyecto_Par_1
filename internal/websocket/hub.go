@@ -1,8 +1,8 @@
-package sockets
+package websocket
 
 import (
-	"chat_distribuido/db"
-	"chat_distribuido/utils"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/utils"
 	"context"
 	"encoding/json"
 	"log"
@@ -33,7 +33,7 @@ func Nuevo_Hub() *Hub {
 		Registro:    make(chan *Cliente),
 		Desregistro: make(chan *Cliente),
 		Broadcast:   make(chan Mensaje),
-		RedisClient: db.GetRedisClient(),
+		RedisClient: repository.GetRedisClient(),
 		ctx:         context.Background(),
 	}
 }
@@ -53,7 +53,7 @@ func (h *Hub) Run() {
 			h.mutex.Unlock()
 
 			// Marcar como activo en MongoDB (útil si vienen de un refresh)
-			collection := db.GetCollection("usuarios")
+			collection := repository.GetCollection("usuarios")
 			collection.UpdateOne(h.ctx,
 				bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
 				bson.M{"$set": bson.M{"activo": true, "last_active": time.Now()}})
@@ -111,7 +111,7 @@ func (h *Hub) Run() {
 				}
 
 				// No se reconectó → limpiar sesión de verdad
-				collection := db.GetCollection("usuarios")
+				collection := repository.GetCollection("usuarios")
 				_, err := collection.UpdateOne(h.ctx,
 					bson.M{"device_id": c.DeviceId, "nickname": c.Nickname},
 					bson.M{
@@ -162,7 +162,7 @@ func (h *Hub) Run() {
 			// Guardar en MongoDB los mensajes que representan contenido (chat o multimedia)
 			if message.Tipo == "chat" || message.Tipo == "multimedia" {
 				go func(msg Mensaje) {
-					collection := db.GetCollection("mensajes")
+					collection := repository.GetCollection("mensajes")
 					if msg.Timestamp == 0 {
 						msg.Timestamp = time.Now().Unix()
 					}
@@ -223,7 +223,7 @@ func (h *Hub) listenRedis() {
 
 func (h *Hub) notifyUserList(roomID string) {
 	// Obtener lista global de usuarios de MongoDB
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 	cursor, err := collection.Find(h.ctx, bson.M{"sala_id": roomID, "activo": true})
 	if err != nil {
 		log.Printf("Error obteniendo usuarios de sala %s: %v", roomID, err)

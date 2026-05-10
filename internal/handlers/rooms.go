@@ -1,10 +1,10 @@
-package controladores
+package handlers
 
 import (
-	"chat_distribuido/controladores/sockets"
-	"chat_distribuido/db"
-	"chat_distribuido/modelos"
-	"chat_distribuido/utils"
+	"chat_distribuido/internal/websocket"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/models"
+	"chat_distribuido/internal/utils"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -19,9 +19,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var hub *sockets.Hub
+var hub *websocket.Hub
 
-func SetHub(h *sockets.Hub) {
+func SetHub(h *websocket.Hub) {
 	hub = h
 }
 
@@ -50,9 +50,9 @@ type RoomResponse struct {
 	Nombre   string `json:"nombre,omitempty"`
 }
 
-func validarSalaYPin(ctx *gin.Context, salaID, pin string) (*modelos.Sala, error) {
-	var sala modelos.Sala
-	collection := db.GetCollection("salas")
+func validarSalaYPin(ctx *gin.Context, salaID, pin string) (*models.Sala, error) {
+	var sala models.Sala
+	collection := repository.GetCollection("salas")
 	err := collection.FindOne(ctx.Request.Context(), bson.M{"sala_id": salaID}).Decode(&sala)
 	if err != nil {
 		return nil, err
@@ -112,9 +112,9 @@ func getRealIP(c *gin.Context) string {
 }
 
 // buscarDispositivoExistente busca un dispositivo activo por su IP
-func buscarDispositivoExistente(ctx *gin.Context, ip string) (*modelos.Usuario, error) {
-	var usuario modelos.Usuario
-	collection := db.GetCollection("usuarios")
+func buscarDispositivoExistente(ctx *gin.Context, ip string) (*models.Usuario, error) {
+	var usuario models.Usuario
+	collection := repository.GetCollection("usuarios")
 	err := collection.FindOne(ctx.Request.Context(), bson.M{"ip": ip, "activo": true}).Decode(&usuario)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func buscarDispositivoExistente(ctx *gin.Context, ip string) (*modelos.Usuario, 
 
 // actualizarUsuarioSala actualiza un usuario existente a una nueva sala
 func actualizarUsuarioSala(ctx *gin.Context, deviceID, salaID, nickname, ip string) error {
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
 			"sala_id":     salaID,
@@ -142,8 +142,8 @@ func actualizarUsuarioSala(ctx *gin.Context, deviceID, salaID, nickname, ip stri
 }
 
 func verificarNicknameDisponible(ctx *gin.Context, salaID, nickname string) bool {
-	collection := db.GetCollection("usuarios")
-	var usuario modelos.Usuario
+	collection := repository.GetCollection("usuarios")
+	var usuario models.Usuario
 	err := collection.FindOne(ctx.Request.Context(), bson.M{
 		"sala_id":  salaID,
 		"nickname": nickname,
@@ -153,7 +153,7 @@ func verificarNicknameDisponible(ctx *gin.Context, salaID, nickname string) bool
 }
 
 func generarNicknameAutomatico(ctx *gin.Context, salaID string) string {
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 
 	// Contar el total
 	totalUsersInSystem, _ := collection.CountDocuments(ctx.Request.Context(), bson.M{})
@@ -170,7 +170,7 @@ func generarNicknameAutomatico(ctx *gin.Context, salaID string) string {
 	return nickname
 }
 
-func procesarNickname(ctx *gin.Context, salaID string, nicknameSolicitado string, usuarioExistente *modelos.Usuario) (string, error) {
+func procesarNickname(ctx *gin.Context, salaID string, nicknameSolicitado string, usuarioExistente *models.Usuario) (string, error) {
 	// Caso: Usuario proporciona nickname
 	if nicknameSolicitado != "" {
 		if !verificarNicknameDisponible(ctx, salaID, nicknameSolicitado) {
@@ -198,12 +198,12 @@ func (e *NicknameError) Error() string {
 	return e.Message
 }
 
-func crearNuevoUsuario(ctx *gin.Context, salaID, deviceID, nickname, ip string) (*modelos.Usuario, error) {
-	collection := db.GetCollection("usuarios")
+func crearNuevoUsuario(ctx *gin.Context, salaID, deviceID, nickname, ip string) (*models.Usuario, error) {
+	collection := repository.GetCollection("usuarios")
 
 	usuarioID := generateUserID()
 
-	usuario := modelos.Usuario{
+	usuario := models.Usuario{
 		UsuarioID: usuarioID,
 		Nickname:  nickname,
 		SalaID:    salaID,
@@ -260,7 +260,7 @@ func UnirseSalaHandler(c *gin.Context) {
 	}
 
 	// === CAPA 1: Verificar en Redis si este DeviceID ya tiene sesión activa ===
-	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+req.DeviceID).Result()
+	activeSession, errRedis := repository.RedisClient.Get(c.Request.Context(), "device_active_session:"+req.DeviceID).Result()
 	if errRedis == nil && activeSession != "" {
 		expectedSession := req.Nickname + "|" + req.SalaID
 		if activeSession != expectedSession {
@@ -271,8 +271,8 @@ func UnirseSalaHandler(c *gin.Context) {
 		}
 	}
 
-	var usuarioActivoPorDevice modelos.Usuario
-	errDevice := db.GetCollection("usuarios").FindOne(c.Request.Context(),
+	var usuarioActivoPorDevice models.Usuario
+	errDevice := repository.GetCollection("usuarios").FindOne(c.Request.Context(),
 		bson.M{"device_id": req.DeviceID, "activo": true}).Decode(&usuarioActivoPorDevice)
 	if errDevice == nil {
 		if usuarioActivoPorDevice.Nickname != req.Nickname || usuarioActivoPorDevice.SalaID != req.SalaID {
@@ -283,8 +283,8 @@ func UnirseSalaHandler(c *gin.Context) {
 		}
 	}
 
-	var usuarioExistente modelos.Usuario
-	err = db.GetCollection("usuarios").FindOne(c.Request.Context(),
+	var usuarioExistente models.Usuario
+	err = repository.GetCollection("usuarios").FindOne(c.Request.Context(),
 		bson.M{"device_id": req.DeviceID}).Decode(&usuarioExistente)
 	fmt.Printf("=== DEPURACIÓN UNIRSE SALA ===\nDeviceID: %s\nIP: %s\nError búsqueda usuario: %v\n", req.DeviceID, clientIP, err)
 	var usuarioID string
@@ -327,7 +327,7 @@ func UnirseSalaHandler(c *gin.Context) {
 				"last_active": time.Now(),
 			},
 		}
-		_, err = db.GetCollection("usuarios").UpdateOne(c.Request.Context(),
+		_, err = repository.GetCollection("usuarios").UpdateOne(c.Request.Context(),
 			bson.M{"device_id": req.DeviceID}, update)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error actualizando usuario"})
@@ -350,7 +350,7 @@ func UnirseSalaHandler(c *gin.Context) {
 		}
 
 		usuarioID = generateUserID()
-		usuario := modelos.Usuario{
+		usuario := models.Usuario{
 			UsuarioID:  usuarioID,
 			Nickname:   nickname,
 			SalaID:     req.SalaID,
@@ -361,7 +361,7 @@ func UnirseSalaHandler(c *gin.Context) {
 			LastActive: time.Now(),
 		}
 
-		_, err = db.GetCollection("usuarios").InsertOne(c.Request.Context(), usuario)
+		_, err = repository.GetCollection("usuarios").InsertOne(c.Request.Context(), usuario)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error registrando usuario"})
 			return
@@ -398,7 +398,7 @@ func UnirseSalaHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 func getActiveUsersInRoom(ctx *gin.Context, salaID string) []map[string]string {
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 
 	cursor, err := collection.Find(ctx.Request.Context(), bson.M{
 		"sala_id": salaID,
@@ -410,7 +410,7 @@ func getActiveUsersInRoom(ctx *gin.Context, salaID string) []map[string]string {
 	}
 	defer cursor.Close(ctx.Request.Context())
 
-	var usuarios []modelos.Usuario
+	var usuarios []models.Usuario
 	if err = cursor.All(ctx.Request.Context(), &usuarios); err != nil {
 		return []map[string]string{}
 	}
@@ -442,7 +442,7 @@ func DejarSalaHandler(c *gin.Context) {
 	println("SalaID recibida:", req.SalaID)
 	println("Longitud del ID:", len(req.UsuarioID))
 
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
 			"activo":      false,
@@ -460,10 +460,10 @@ func DejarSalaHandler(c *gin.Context) {
 	// Requiere que busquemos primero el dispositivo del usuario para saber su DeviceID,
 	// pero en 'DejarSalaHandler' solo tenemos usuario_id y sala_id.
 	// Vamos a recuperar el DeviceID del usuario para limpiar correctamente Redis.
-	var usuario modelos.Usuario
-	errBuscar := db.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": req.UsuarioID}).Decode(&usuario)
+	var usuario models.Usuario
+	errBuscar := repository.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": req.UsuarioID}).Decode(&usuario)
 	if errBuscar == nil && usuario.DeviceID != "" {
-		db.RedisClient.Del(c.Request.Context(), "device_active_session:"+usuario.DeviceID)
+		repository.RedisClient.Del(c.Request.Context(), "device_active_session:"+usuario.DeviceID)
 	}
 
 	if result.MatchedCount == 0 {
@@ -493,7 +493,7 @@ func ActualizarNicknameHandler(c *gin.Context) {
 		return
 	}
 
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 	update := bson.M{
 		"$set": bson.M{
 			"nickname":    req.NicknameNuevo,
@@ -532,7 +532,7 @@ func ListaSalas(c *gin.Context) {
 		return
 	}
 
-	collection := db.GetCollection("salas")
+	collection := repository.GetCollection("salas")
 	opts := options.Find().SetProjection(bson.M{"pin": 0})
 
 	cursor, err := collection.Find(c.Request.Context(), bson.M{}, opts)
@@ -542,7 +542,7 @@ func ListaSalas(c *gin.Context) {
 	}
 	defer cursor.Close(c.Request.Context())
 
-	var salas []modelos.Sala
+	var salas []models.Sala
 	if err = cursor.All(c.Request.Context(), &salas); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando salas"})
 		return
@@ -574,7 +574,7 @@ func GetMessagesHandler(c *gin.Context) {
 		return
 	}
 
-	collection := db.GetCollection("mensajes")
+	collection := repository.GetCollection("mensajes")
 	// Obtener los últimos 100 mensajes, ordenados por timestamp ascendente
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{Key: "timestamp", Value: -1}})
@@ -587,7 +587,7 @@ func GetMessagesHandler(c *gin.Context) {
 	}
 	defer cursor.Close(c.Request.Context())
 
-	var mensajes []modelos.Mensaje
+	var mensajes []models.Mensaje
 	if err = cursor.All(c.Request.Context(), &mensajes); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando mensajes"})
 		return
@@ -615,7 +615,7 @@ func GetMessagesHandler(c *gin.Context) {
 	}
 
 	if mensajes == nil {
-		mensajes = make([]modelos.Mensaje, 0)
+		mensajes = make([]models.Mensaje, 0)
 	}
 
 	c.JSON(http.StatusOK, mensajes)

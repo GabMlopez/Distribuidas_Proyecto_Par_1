@@ -1,8 +1,8 @@
-package controladores
+package handlers
 
 import (
-	"chat_distribuido/controladores/sockets"
-	"chat_distribuido/db"
+	"chat_distribuido/internal/websocket"
+	"chat_distribuido/internal/repository"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"chat_distribuido/modelos"
-	"chat_distribuido/utils"
+	"chat_distribuido/internal/models"
+	"chat_distribuido/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
 	"go.mongodb.org/mongo-driver/bson"
@@ -99,12 +99,12 @@ func UploadFileHandler(c *gin.Context) {
 	}
 
 	// Subir archivo a MinIO
-	if db.MinioClient == nil {
+	if repository.MinioClient == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "El servicio de almacenamiento no está disponible actualmente. El archivo no se pudo subir."})
 		return
 	}
 
-	_, err = db.MinioClient.PutObject(c.Request.Context(), db.MinioBucket, filename, file, fileSize, minio.PutObjectOptions{
+	_, err = repository.MinioClient.PutObject(c.Request.Context(), repository.MinioBucket, filename, file, fileSize, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
@@ -119,8 +119,8 @@ func UploadFileHandler(c *gin.Context) {
 	usuarioID, exists := c.Get("usuario")
 	nickname := "Sistema"
 	if exists {
-		var usuario modelos.Usuario
-		err := db.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": usuarioID.(string)}).Decode(&usuario)
+		var usuario models.Usuario
+		err := repository.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": usuarioID.(string)}).Decode(&usuario)
 		if err == nil && usuario.Nickname != "" {
 			nickname = usuario.Nickname
 		}
@@ -135,7 +135,7 @@ func UploadFileHandler(c *gin.Context) {
 
 	// Emitir evento por WebSocket si el hub está disponible
 	if hub != nil {
-		hub.Broadcast <- sockets.Mensaje{
+		hub.Broadcast <- websocket.Mensaje{
 			Tipo:      "multimedia",
 			Nickname:  nickname,
 			Texto:     fmt.Sprintf("Nuevo archivo compartido: %s", header.Filename),
@@ -162,13 +162,13 @@ func GetFileHandler(c *gin.Context) {
 	// Mitigar Path Traversal: obtener solo el nombre base
 	safeFilename := filepath.Base(filename)
 
-	if db.MinioClient == nil {
+	if repository.MinioClient == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Servicio de almacenamiento no disponible"})
 		return
 	}
 
 	// Obtener el archivo desde MinIO
-	object, err := db.MinioClient.GetObject(c.Request.Context(), db.MinioBucket, safeFilename, minio.GetObjectOptions{})
+	object, err := repository.MinioClient.GetObject(c.Request.Context(), repository.MinioBucket, safeFilename, minio.GetObjectOptions{})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error recuperando archivo"})
 		return
@@ -200,8 +200,8 @@ func DeleteFileHandler(c *gin.Context) {
 		return
 	}
 
-	var usuario modelos.Usuario
-	err := db.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": usuarioID.(string)}).Decode(&usuario)
+	var usuario models.Usuario
+	err := repository.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": usuarioID.(string)}).Decode(&usuario)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Usuario no encontrado"})
 		return
@@ -210,8 +210,8 @@ func DeleteFileHandler(c *gin.Context) {
 	fileURL := fmt.Sprintf("/upload/file/%s", safeFilename)
 
 	// Buscar el mensaje asociado
-	var mensaje modelos.Mensaje
-	err = db.GetCollection("mensajes").FindOne(c.Request.Context(), bson.M{"file_url": fileURL}).Decode(&mensaje)
+	var mensaje models.Mensaje
+	err = repository.GetCollection("mensajes").FindOne(c.Request.Context(), bson.M{"file_url": fileURL}).Decode(&mensaje)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Mensaje o archivo no encontrado"})
 		return
@@ -224,8 +224,8 @@ func DeleteFileHandler(c *gin.Context) {
 	}
 
 	// Eliminar de MinIO
-	if db.MinioClient != nil {
-		err = db.MinioClient.RemoveObject(c.Request.Context(), db.MinioBucket, safeFilename, minio.RemoveObjectOptions{})
+	if repository.MinioClient != nil {
+		err = repository.MinioClient.RemoveObject(c.Request.Context(), repository.MinioBucket, safeFilename, minio.RemoveObjectOptions{})
 		if err != nil {
 			log.Printf("Error eliminando archivo de MinIO: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al eliminar el archivo físico"})
@@ -241,14 +241,14 @@ func DeleteFileHandler(c *gin.Context) {
 			"texto":    textoCifrado,
 		},
 	}
-	_, err = db.GetCollection("mensajes").UpdateOne(c.Request.Context(), bson.M{"_id": mensaje.Id}, update)
+	_, err = repository.GetCollection("mensajes").UpdateOne(c.Request.Context(), bson.M{"_id": mensaje.Id}, update)
 	if err != nil {
 		log.Printf("Error actualizando mensaje en MongoDB: %v", err)
 	}
 
 	// Emitir evento por WebSocket para eliminar en UI
 	if hub != nil {
-		hub.Broadcast <- sockets.Mensaje{
+		hub.Broadcast <- websocket.Mensaje{
 			Tipo:      "delete_message",
 			SalaID:    mensaje.SalaID,
 			FileURL:   fileURL,

@@ -1,9 +1,9 @@
-package controladores
+package handlers
 
 import (
-	"chat_distribuido/db"
-	"chat_distribuido/modelos"
-	"chat_distribuido/utils"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/models"
+	"chat_distribuido/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -30,8 +30,8 @@ func Login_handler(c *gin.Context) {
 	}
 
 	// Buscar administrador en MongoDB
-	var admin modelos.Administrador
-	collection := db.GetCollection("administradores")
+	var admin models.Administrador
+	collection := repository.GetCollection("administradores")
 	err := collection.FindOne(c.Request.Context(), bson.M{"usuario": req.Usuario}).Decode(&admin)
 
 	if err != nil {

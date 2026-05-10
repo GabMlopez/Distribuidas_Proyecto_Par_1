@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"chat_distribuido/utils"
+	"chat_distribuido/internal/utils"
 	"net/http"
 	"strings"
 

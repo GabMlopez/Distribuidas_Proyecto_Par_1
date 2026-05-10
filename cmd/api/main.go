@@ -1,10 +1,10 @@
 package main
 
 import (
-	"chat_distribuido/controladores"
-	"chat_distribuido/controladores/sockets"
-	"chat_distribuido/db"
-	"chat_distribuido/middleware"
+	"chat_distribuido/internal/handlers"
+	"chat_distribuido/internal/websocket"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/middleware"
 	"context"
 	"log"
 	"net/http"
@@ -24,19 +24,19 @@ func main() {
 		log.Println("Error cargando .env file")
 	}
 
-	db.ConnectDB()
-	db.ConnectRedis()
-	db.ConnectMinio()
-	defer db.DisconnectDB()
+	repository.ConnectDB()
+	repository.ConnectRedis()
+	repository.ConnectMinio()
+	defer repository.DisconnectDB()
 
 	// Limpiar usuarios fantasma de sesiones anteriores (útil en desarrollo)
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 	collection.UpdateMany(context.Background(), bson.M{}, bson.M{"$set": bson.M{"activo": false}})
 
 	// Limpiar sesiones activas de Redis (stale keys de ejecuciones anteriores)
-	iter := db.RedisClient.Scan(context.Background(), 0, "device_active_session:*", 100).Iterator()
+	iter := repository.RedisClient.Scan(context.Background(), 0, "device_active_session:*", 100).Iterator()
 	for iter.Next(context.Background()) {
-		db.RedisClient.Del(context.Background(), iter.Val())
+		repository.RedisClient.Del(context.Background(), iter.Val())
 	}
 	log.Println("Sesiones anteriores limpiadas (MongoDB + Redis)")
 
@@ -59,9 +59,9 @@ func main() {
 	}
 
 	// Crear hub central de WebSocket
-	hub := sockets.Nuevo_Hub()
+	hub := websocket.Nuevo_Hub()
 	go hub.Run()
-	controladores.SetHub(hub)
+	handlers.SetHub(hub)
 
 	// Configurar router
 	r := gin.Default()
@@ -123,8 +123,8 @@ func main() {
 	// Autenticación
 	auth := r.Group("/auth")
 	{
-		auth.POST("/login", controladores.Login_handler)
-		auth.POST("/logout", controladores.Logout)
+		auth.POST("/login", handlers.Login_handler)
+		auth.POST("/logout", handlers.Logout)
 	}
 
 	// Gestión de salas
@@ -132,38 +132,38 @@ func main() {
 	adminRoutes.Use(middleware.AuthMiddlewareAdmin())
 	{
 		// Crear sala (solo admin)
-		adminRoutes.POST("/rooms", controladores.CreateSalasHandler)
+		adminRoutes.POST("/rooms", handlers.CreateSalasHandler)
 
 		// Actualizar sala (solo admin)
-		adminRoutes.PUT("/rooms/:roomId", controladores.UpdateSalaHandler)
+		adminRoutes.PUT("/rooms/:roomId", handlers.UpdateSalaHandler)
 
 		// Eliminar sala (solo admin)
-		adminRoutes.DELETE("/rooms/:roomId", controladores.DeleteSalaHandler)
+		adminRoutes.DELETE("/rooms/:roomId", handlers.DeleteSalaHandler)
 
 		// Obtener todas las salas (admin)
-		adminRoutes.GET("/rooms", controladores.GetAllSalasAdmin)
+		adminRoutes.GET("/rooms", handlers.GetAllSalasAdmin)
 	}
 
 	roomRoutes := r.Group("/rooms")
 	{
-		roomRoutes.GET("/list", controladores.ListaSalas)
-		roomRoutes.POST("/join", controladores.UnirseSalaHandler)
-		roomRoutes.POST("/leave", controladores.DejarSalaHandler)
-		roomRoutes.GET("/:roomId/messages", controladores.GetMessagesHandler)
+		roomRoutes.GET("/list", handlers.ListaSalas)
+		roomRoutes.POST("/join", handlers.UnirseSalaHandler)
+		roomRoutes.POST("/leave", handlers.DejarSalaHandler)
+		roomRoutes.GET("/:roomId/messages", handlers.GetMessagesHandler)
 	}
 
 	// WebSocket
 	r.GET("/ws/:roomId", func(c *gin.Context) {
-		controladores.HandleWebSocket(hub, c)
+		handlers.HandleWebSocket(hub, c)
 	})
 
 	// Subida de archivos (Protegido para subir, público para descargar vía link)
-	r.GET("/upload/file/:filename", controladores.GetFileHandler)
+	r.GET("/upload/file/:filename", handlers.GetFileHandler)
 	uploadRoutes := r.Group("/upload")
 	uploadRoutes.Use(middleware.AuthMiddlewareUser())
 	{
-		uploadRoutes.POST("/file", controladores.UploadFileHandler)
-		uploadRoutes.DELETE("/file/:filename", controladores.DeleteFileHandler)
+		uploadRoutes.POST("/file", handlers.UploadFileHandler)
+		uploadRoutes.DELETE("/file/:filename", handlers.DeleteFileHandler)
 	}
 
 	port := os.Getenv("PORT")
