@@ -40,12 +40,24 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		return
 	}
 
+	clientIP := c.ClientIP()
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al establecer conexión WebSocket"})
 		return
 	}
 
+	// Validar que el dispositivo (IP) no tenga otra sesión activa (usando Redis)
+	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+clientIP).Result()
+	if errRedis == nil && activeSession != "" {
+		conn.WriteJSON(sockets.Mensaje{
+			Tipo:  "error",
+			Texto: "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
+		})
+		conn.Close()
+		return
+	}
 	cliente := &sockets.Cliente{
 		Hub:      hub,
 		Conn:     conn,
@@ -53,7 +65,7 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		Nickname: nickname,
 		SalaId:   salaID,
 		DeviceId: deviceID,
-		Ip:       c.ClientIP(),
+		Ip:       clientIP,
 	}
 
 	hub.Registro <- cliente

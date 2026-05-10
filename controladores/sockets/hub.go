@@ -51,6 +51,8 @@ func (h *Hub) Run() {
 			h.Salas[client.SalaId][client] = true
 			h.mutex.Unlock()
 
+			// Registrar en Redis la sesión activa del dispositivo (por IP) con caducidad de seguridad (24h)
+			h.RedisClient.Set(h.ctx, "device_active_session:"+client.Ip, client.Nickname+"|"+client.SalaId, 24*time.Hour)
 			h.notifyUserList(client.SalaId)
 			// Notificar que alguien se unió
 			go func(c *Cliente) {
@@ -65,6 +67,8 @@ func (h *Hub) Run() {
 
 		case client := <-h.Desregistro:
 			h.mutex.Lock()
+			// Determinar si este dispositivo tiene otras conexiones activas
+			deviceTieneMasConexiones := false
 			if clients, ok := h.Salas[client.SalaId]; ok {
 				if _, ok := clients[client]; ok {
 					delete(clients, client)
@@ -85,6 +89,14 @@ func (h *Hub) Run() {
 						log.Printf("Error marcando usuario %s como inactivo: %v", client.Nickname, err)
 					}
 
+					// Verificar si el dispositivo (IP) aún tiene otra conexión activa
+					for c := range clients {
+						if c.Ip == client.Ip {
+							deviceTieneMasConexiones = true
+							break
+						}
+					}
+
 					// Si la sala queda vacía, la eliminamos
 					if len(clients) == 0 {
 						delete(h.Salas, client.SalaId)
@@ -93,6 +105,10 @@ func (h *Hub) Run() {
 			}
 			h.mutex.Unlock()
 
+			// Eliminar registro de dispositivo en Redis solo si ya no tiene conexiones activas
+			if !deviceTieneMasConexiones {
+				h.RedisClient.Del(h.ctx, "device_active_session:"+client.Ip)
+			}
 			// Notificar usuarios actualizados
 			h.notifyUserList(client.SalaId)
 			// Notificar que alguien salió

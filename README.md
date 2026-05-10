@@ -167,3 +167,4 @@ La interfaz queda disponible en `http://localhost:3000`.
 | Admin   | admin123   | Admin |
 
 > Los usuarios regulares solo necesitan elegir un nickname al unirse a una sala.
+
