@@ -40,8 +40,12 @@ func ConnectDB() {
 		log.Fatal("Error al intentar hacer ping: ", err)
 	}
 
-	db = cliente.Database("chat_distribuido")
-	log.Println("Conexión con Mongo Establecida")
+	dbName := os.Getenv("MONGODB_DB_NAME")
+	if dbName == "" {
+		dbName = "chat_distribuido" // Fallback por defecto
+	}
+	db = cliente.Database(dbName)
+	log.Printf("Conexión con Mongo Establecida. Base de datos: %s", dbName)
 
 }
 
