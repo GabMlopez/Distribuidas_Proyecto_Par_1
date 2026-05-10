@@ -73,37 +73,12 @@ func (h *Hub) Run() {
 
 		case client := <-h.Desregistro:
 			h.mutex.Lock()
-			// Determinar si este dispositivo tiene otras conexiones activas
-			deviceTieneMasConexiones := false
 			if clients, ok := h.Salas[client.SalaId]; ok {
 				if _, ok := clients[client]; ok {
 					delete(clients, client)
 					close(client.Envio)
 
-					// Marcar como inactivo en MongoDB
-					collection := db.GetCollection("usuarios")
-					_, err := collection.UpdateOne(h.ctx,
-						bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
-						bson.M{
-							"$set": bson.M{
-								"activo":      false,
-								"left_at":     time.Now(),
-								"last_active": time.Now(),
-							},
-						})
-					if err != nil {
-						log.Printf("Error marcando usuario %s como inactivo: %v", client.Nickname, err)
-					}
-
-					// Verificar si el dispositivo (IP) aún tiene otra conexión activa
-					for c := range clients {
-						if c.Ip == client.Ip {
-							deviceTieneMasConexiones = true
-							break
-						}
-					}
-
-					// Si la sala queda vacía, la eliminamos
+					// Si la sala queda vacía, la eliminamos del mapa en memoria
 					if len(clients) == 0 {
 						delete(h.Salas, client.SalaId)
 					}
@@ -111,22 +86,76 @@ func (h *Hub) Run() {
 			}
 			h.mutex.Unlock()
 
-			// Eliminar registro de dispositivo en Redis solo si ya no tiene conexiones activas
-			if !deviceTieneMasConexiones {
-				h.RedisClient.Del(h.ctx, "device_active_session:"+client.Ip)
-			}
-			// Notificar usuarios actualizados
-			h.notifyUserList(client.SalaId)
-			// Notificar que alguien salió
+			// === GRACE PERIOD: esperar antes de marcar inactivo ===
+			// Esto permite que un refresh reconecte antes de limpiar la sesión.
 			go func(c *Cliente) {
+				time.Sleep(5 * time.Second)
+
+				// Verificar si el usuario se reconectó durante la espera
+				h.mutex.RLock()
+				reconnected := false
+				if clients, ok := h.Salas[c.SalaId]; ok {
+					for activeClient := range clients {
+						if activeClient.DeviceId == c.DeviceId && activeClient.Nickname == c.Nickname {
+							reconnected = true
+							break
+						}
+					}
+				}
+				h.mutex.RUnlock()
+
+				if reconnected {
+					log.Printf("Cliente %s se reconectó a sala %s (refresh detectado, cancelando limpieza)", c.Nickname, c.SalaId)
+					return
+				}
+
+				// No se reconectó → limpiar sesión de verdad
+				collection := db.GetCollection("usuarios")
+				_, err := collection.UpdateOne(h.ctx,
+					bson.M{"device_id": c.DeviceId, "nickname": c.Nickname},
+					bson.M{
+						"$set": bson.M{
+							"activo":      false,
+							"left_at":     time.Now(),
+							"last_active": time.Now(),
+						},
+					})
+				if err != nil {
+					log.Printf("Error marcando usuario %s como inactivo: %v", c.Nickname, err)
+				}
+
+				// Verificar si la IP aún tiene otra conexión activa antes de borrar Redis
+				h.mutex.RLock()
+				ipStillActive := false
+				for _, clients := range h.Salas {
+					for activeClient := range clients {
+						if activeClient.Ip == c.Ip {
+							ipStillActive = true
+							break
+						}
+					}
+					if ipStillActive {
+						break
+					}
+				}
+				h.mutex.RUnlock()
+
+				if !ipStillActive {
+					h.RedisClient.Del(h.ctx, "device_active_session:"+c.Ip)
+				}
+
+				// Notificar usuarios actualizados
+				h.notifyUserList(c.SalaId)
+
+				// Notificar que salió
 				h.Broadcast <- Mensaje{
 					Tipo:     "leave",
 					Nickname: "Sistema",
 					Texto:    c.Nickname + " ha salido de la sala",
 					SalaID:   c.SalaId,
 				}
+				log.Printf("Cliente %s desconectado de sala %s (limpieza completa)", c.Nickname, c.SalaId)
 			}(client)
-			log.Printf("Cliente %s desconectado de sala %s", client.Nickname, client.SalaId)
 
 		case message := <-h.Broadcast:
 			// Guardar en MongoDB los mensajes que representan contenido (chat o multimedia)
