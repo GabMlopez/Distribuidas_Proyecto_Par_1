@@ -21,24 +21,25 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [userContext, setUserContext] = useState<UserContextState>(() => {
-    if (typeof window !== 'undefined') {
-      return {
-        token: localStorage.getItem('token'),
-        nickname: localStorage.getItem('nickname') || '',
-        deviceId: localStorage.getItem('deviceId') || '',
-        userId: localStorage.getItem('userId') || '',
-        isAdmin: localStorage.getItem('isAdmin') === 'true'
-      };
-    }
-    return {
-      token: null,
-      nickname: '',
-      deviceId: '',
-      userId: '',
-      isAdmin: false
-    };
+  const [userContext, setUserContext] = useState<UserContextState>({
+    token: null,
+    nickname: '',
+    deviceId: '',
+    userId: '',
+    isAdmin: false
   });
+
+  useEffect(() => {
+    // Hidratación controlada post-render (arregla el error rojo "Hydration failed")
+    setUserContext(prev => ({
+      ...prev,
+      token: localStorage.getItem('token'),
+      nickname: localStorage.getItem('nickname') || '',
+      deviceId: localStorage.getItem('deviceId') || '',
+      userId: localStorage.getItem('userId') || '',
+      isAdmin: localStorage.getItem('isAdmin') === 'true'
+    }));
+  }, []);
 
   useEffect(() => {
     const fetchDeviceId = async () => {
