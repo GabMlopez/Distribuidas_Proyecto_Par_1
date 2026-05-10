@@ -67,6 +67,71 @@ func (h *Hub) Run() {
 
 		case client := <-h.Desregistro:
 			h.mutex.Lock()
+			if clients, ok := h.Salas[client.SalaId]; ok {
+				if _, ok := clients[client]; ok {
+					delete(clients, client)
+					close(client.Envio)
+
+					// No marcar como inactivo inmediatamente - esperar posible reconexión
+					// El dispositivo puede estar recargando la página
+					go func(c *Cliente) {
+						// Esperar 10 segundos antes de marcar como inactivo
+						time.Sleep(10 * time.Second)
+
+						// Verificar si el cliente sigue desconectado (no se ha reconectado)
+						h.mutex.RLock()
+						_, stillConnected := h.Salas[c.SalaId][c]
+						h.mutex.RUnlock()
+
+						if !stillConnected {
+							collection := db.GetCollection("usuarios")
+							collection.UpdateOne(h.ctx,
+								bson.M{"device_id": c.DeviceId, "sala_id": c.SalaId},
+								bson.M{
+									"$set": bson.M{
+										"activo":      false,
+										"left_at":     time.Now(),
+										"last_active": time.Now(),
+									},
+								})
+
+							// Solo eliminar Redis si no hay otras conexiones de esta IP
+							h.mutex.RLock()
+							hasOtherConnections := false
+							for otherClient := range clients {
+								if otherClient.Ip == c.Ip && otherClient != c {
+									hasOtherConnections = true
+									break
+								}
+							}
+							h.mutex.RUnlock()
+
+							if !hasOtherConnections {
+								h.RedisClient.Del(h.ctx, "device_active_session:"+c.Ip)
+							}
+						}
+					}(client)
+
+					if len(clients) == 0 {
+						delete(h.Salas, client.SalaId)
+					}
+				}
+			}
+			h.mutex.Unlock()
+
+			h.notifyUserList(client.SalaId)
+
+			go func(c *Cliente) {
+				h.Broadcast <- Mensaje{
+					Tipo:     "leave",
+					Nickname: "Sistema",
+					Texto:    c.Nickname + " ha salido de la sala",
+					SalaID:   c.SalaId,
+				}
+			}(client)
+
+			log.Printf("Cliente %s desconectado de sala %s (esperando posible reconexión)", client.Nickname, client.SalaId)
+			h.mutex.Lock()
 			// Determinar si este dispositivo tiene otras conexiones activas
 			deviceTieneMasConexiones := false
 			if clients, ok := h.Salas[client.SalaId]; ok {
@@ -123,7 +188,15 @@ func (h *Hub) Run() {
 			log.Printf("Cliente %s desconectado de sala %s", client.Nickname, client.SalaId)
 
 		case message := <-h.Broadcast:
-			// Publicar en Redis. La distribución local ocurrirá en listenRedis
+			if message.Tipo == "chat" || message.Tipo == "file" {
+				go func(m Mensaje) {
+					err := db.GuardarMensaje(m)
+					if err != nil {
+						log.Printf("Error guardando mensaje: %v", err)
+					}
+				}(message)
+			}
+
 			h.publishToRedis(message)
 		}
 	}
