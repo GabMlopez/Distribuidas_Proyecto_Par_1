@@ -148,6 +148,7 @@ func main() {
 		roomRoutes.POST("/join", controladores.UnirseSalaHandler)
 		roomRoutes.POST("/leave", controladores.DejarSalaHandler)
 		roomRoutes.GET("/:roomId/messages", controladores.GetHistorialMensajes)
+
 	}
 
 	// WebSocket
