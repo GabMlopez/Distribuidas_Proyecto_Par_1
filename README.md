@@ -28,7 +28,7 @@ Sistema de mensajería distribuida con soporte para salas de texto y multimedia,
 ## ✨ Características Principales
 
 ### 🔒 Seguridad y Control de Sesiones
-- **Sesión única por dispositivo (IP):** El servidor bloquea con HTTP 409 cualquier intento de conexión desde una IP que ya tiene una sesión activa, incluso desde modo incógnito o distintas pestañas.
+- **Sesión única estricta (DeviceID + IP):** El servidor bloquea con HTTP 409 cualquier intento de sesión duplicada utilizando un Canvas Fingerprint generado en el cliente, validación de IP local y estado de WebSockets en memoria (bloquea múltiples pestañas, modo incógnito y múltiples navegadores en una misma máquina).
 - **JWT:** Autenticación basada en tokens para acceso a salas y subida de archivos.
 - **Cabeceras de seguridad:** CSP, X-Frame-Options y X-Content-Type-Options configurados.
 - **Sanitización de inputs:** Prevención de ataques XSS e IDOR en todos los endpoints sensibles.
@@ -151,12 +151,14 @@ La interfaz queda disponible en `http://localhost:3000`.
 
 ---
 
-## 🛡️ Lógica de Sesión Única
+## 🛡️ Lógica de Sesión Única y Restricción de Dispositivo
 
-1. El cliente genera un `deviceId` basado en hardware (GPU, CPU, RAM, pantalla) en el frontend.
-2. Al hacer `/rooms/join`, el **servidor** verifica si la **IP local** del cliente ya tiene un usuario con `activo: true` en la base de datos.
-3. Si ya existe una sesión activa, responde con **HTTP 409 Conflict**.
-4. Al desconectarse el WebSocket, el Hub automáticamente actualiza `activo: false` en MongoDB, liberando el dispositivo para reconectarse.
+El sistema implementa una arquitectura de 3 capas para garantizar de forma estricta que un dispositivo físico tenga **una sola sesión activa** a la vez, resolviendo problemas comunes como el uso del modo incógnito o múltiples navegadores.
+
+1. **Frontend (Canvas Fingerprinting):** En lugar de usar `localStorage` o APIs bloqueadas en modo incógnito (como WebGL unmasked info), se utiliza Canvas Fingerprinting combinado con propiedades estáticas del hardware (CPU, RAM, Resolución) para generar un **DeviceID determinista** (`hw_XXXXX`) que es idéntico en pestañas normales y de incógnito de un mismo navegador.
+2. **Capa 0 (Hub en Memoria):** Al intentar unirse a una sala o establecer el WebSocket, el servidor verifica instantáneamente si en la memoria RAM (Hub) ya existe una conexión viva para ese **DeviceID** o para esa **Dirección IP**. Esto bloquea de inmediato: pestañas duplicadas, modo incógnito (por el DeviceID coincidente) y otros navegadores en la misma máquina (por la IP local).
+3. **Capa 1 y 2 (Redis y MongoDB):** Si no hay un WebSocket vivo en memoria (ej. reconexión rápida), se valida en Redis y en el índice único de MongoDB (`unique_active_device_id`). Si el dispositivo tiene una sesión marcada como activa, se responde con **HTTP 409 Conflict**.
+4. **Desconexión Limpia:** Al cerrar la ventana o salir de la sala, el servidor libera el DeviceID purificando Redis, el Hub en memoria y marcando `activo: false` en MongoDB, lo que permite al dispositivo reconectarse en el futuro sin bloqueos.
 
 ---
 
