@@ -24,11 +24,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userContext, setUserContext] = useState<UserContextState>(() => {
     if (typeof window !== 'undefined') {
       return {
-        token: sessionStorage.getItem('token'),
-        nickname: sessionStorage.getItem('nickname') || '',
-        deviceId: '',
-        userId: sessionStorage.getItem('userId') || '',
-        isAdmin: sessionStorage.getItem('isAdmin') === 'true'
+        token: localStorage.getItem('token'),
+        nickname: localStorage.getItem('nickname') || '',
+        deviceId: localStorage.getItem('deviceId') || '',
+        userId: localStorage.getItem('userId') || '',
+        isAdmin: localStorage.getItem('isAdmin') === 'true'
       };
     }
     return {
@@ -79,6 +79,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
 
         const finalDeviceId = `hw_${Math.abs(hash)}`;
+        sessionStorage.setItem('deviceId', finalDeviceId);
 
         setUserContext(prev => ({
           ...prev,
@@ -87,9 +88,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }));
       } catch (error) {
         console.error("Error generando Hardware Fingerprint", error);
+        const fallbackId = 'dev_' + Math.random().toString(36).substring(2, 11);
+        localStorage.setItem('deviceId', fallbackId);
         setUserContext(prev => ({
           ...prev,
-          deviceId: 'dev_' + Math.random().toString(36).substring(2, 11),
+          deviceId: fallbackId,
           isAdmin: true  
         }));
       }
@@ -99,10 +102,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = (token: string | null, nickname: string, userId: string, isAdmin: boolean) => {
     setUserContext(prev => ({ ...prev, token, nickname: nickname , userId, isAdmin }));
-    sessionStorage.setItem('token', token || '');
-    sessionStorage.setItem('nickname', nickname);
-    sessionStorage.setItem('userId', userId);
-    sessionStorage.setItem('isAdmin', String(isAdmin));
+    localStorage.setItem('token', token || '');
+    localStorage.setItem('nickname', nickname);
+    localStorage.setItem('userId', userId);
+    localStorage.setItem('isAdmin', String(isAdmin));
   };
 
   const logout = () => {
@@ -113,23 +116,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
       userId: '',
       isAdmin: false
     }));
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('nickname');
-    sessionStorage.removeItem('userId');
-    sessionStorage.removeItem('isAdmin');
-    sessionStorage.removeItem('room_name');
-    sessionStorage.removeItem('room_type');
-    sessionStorage.removeItem('room_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('nickname');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('isAdmin');
+    localStorage.removeItem('room_name');
+    localStorage.removeItem('room_type');
+    localStorage.removeItem('room_token');
   };
 
   const setUserId = (userId: string) => {
     setUserContext(prev => ({ ...prev, userId }));
-    sessionStorage.setItem('userId', userId);  
+    localStorage.setItem('userId', userId);  
   };
 
   const setNickname = (nickname: string) => {
     setUserContext(prev => ({ ...prev, nickname }));
-    sessionStorage.setItem('nickname', nickname);
+    localStorage.setItem('nickname', nickname);
   };
 
    return (

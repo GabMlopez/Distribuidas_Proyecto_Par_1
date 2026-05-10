@@ -16,9 +16,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
   const { userContext } = useUser();
 
-  const [roomName, setRoomName] = useState(() => typeof window !== 'undefined' ? sessionStorage.getItem('room_name') || roomId : roomId);
-  const [roomType, setRoomType] = useState(() => typeof window !== 'undefined' ? sessionStorage.getItem('room_type') || 'texto' : 'texto');
-  const [roomToken, setRoomToken] = useState(() => typeof window !== 'undefined' ? sessionStorage.getItem('room_token') || '' : '');
+  const [roomName, setRoomName] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_name') || roomId : roomId);
+  const [roomType, setRoomType] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_type') || 'texto' : 'texto');
+  const [roomToken, setRoomToken] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_token') || '' : '');
 
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [messages, setMessages] = useState<MsgType[]>([]);
@@ -33,8 +33,10 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (!userContext?.nickname) {
-      router.push('/'); 
+    if (!userContext?.nickname || !userContext?.deviceId) {
+      // Si no hay nickname, redirigir al inicio.
+      // Si falta deviceId, esperamos al siguiente render (está cargando)
+      if (userContext && !userContext.nickname) router.push('/'); 
       return;
     }
 

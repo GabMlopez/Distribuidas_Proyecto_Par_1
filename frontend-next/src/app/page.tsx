@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'user' | 'admin'>('user');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [nickname, setNickname] = useState('');
+  const [nickname, setNickname] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('nickname') || '' : ''));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   

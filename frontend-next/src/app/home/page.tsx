@@ -223,10 +223,10 @@ export default function HomePage() {
       if (res.ok) {
         const backendUserId = data.usuario_id;
         const realNickname = data.nickname || userContext.nickname;
-        sessionStorage.setItem('room_token', data.token);
-        sessionStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
-        sessionStorage.setItem('room_type', selectedRoom.tipo);
-        sessionStorage.setItem('user_id', backendUserId);
+        localStorage.setItem('room_token', data.token);
+        localStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
+        localStorage.setItem('room_type', selectedRoom.tipo);
+        localStorage.setItem('userId', backendUserId);
         
         setUserId(backendUserId);
         setNickname(realNickname);
