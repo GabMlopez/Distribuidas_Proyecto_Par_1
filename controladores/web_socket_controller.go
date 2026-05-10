@@ -50,12 +50,15 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 	// Validar que el dispositivo (IP) no tenga otra sesión activa (usando Redis)
 	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+clientIP).Result()
 	if errRedis == nil && activeSession != "" {
-		conn.WriteJSON(sockets.Mensaje{
-			Tipo:  "error",
-			Texto: "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
-		})
-		conn.Close()
-		return
+		expectedSession := nickname + "|" + salaID
+		if activeSession != expectedSession {
+			conn.WriteJSON(sockets.Mensaje{
+				Tipo:  "error",
+				Texto: "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
+			})
+			conn.Close()
+			return
+		}
 	}
 	cliente := &sockets.Cliente{
 		Hub:      hub,
