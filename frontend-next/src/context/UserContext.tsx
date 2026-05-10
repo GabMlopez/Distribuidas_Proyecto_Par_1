@@ -15,6 +15,7 @@ interface UserContextType {
   login: (token: string | null, nickname: string, userId: string, isAdmin: boolean) => void;
   logout: () => void;
   setUserId: (userId: string) => void;
+  setNickname: (nickname: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -123,11 +124,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const setUserId = (userId: string) => {
     setUserContext(prev => ({ ...prev, userId }));
-    sessionStorage.setItem('user_id', userId);  
+    sessionStorage.setItem('userId', userId);  
+  };
+
+  const setNickname = (nickname: string) => {
+    setUserContext(prev => ({ ...prev, nickname }));
+    sessionStorage.setItem('nickname', nickname);
   };
 
    return (
-    <UserContext.Provider value={{ userContext, login, logout, setUserId }}>
+    <UserContext.Provider value={{ userContext, login, logout, setUserId, setNickname }}>
       {children}
     </UserContext.Provider>
   );

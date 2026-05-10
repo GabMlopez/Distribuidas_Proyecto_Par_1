@@ -451,6 +451,10 @@ func DejarSalaHandler(c *gin.Context) {
 		bson.M{"usuario_id": req.UsuarioID},
 		update)
 
+	// Limpiar sesión en Redis si existe
+	clientIP := getRealIP(c)
+	db.RedisClient.Del(c.Request.Context(), "device_active_session:"+clientIP)
+
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "El usuario no se encuentra en esa sala"})
 		return

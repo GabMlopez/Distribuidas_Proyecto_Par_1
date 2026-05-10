@@ -14,7 +14,7 @@ const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function HomePage() {
   const router = useRouter();
-  const { userContext, logout, setUserId, login } = useUser();
+  const { userContext, logout, setUserId, setNickname } = useUser();
   const isAdmin = userContext.isAdmin;
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -222,11 +222,14 @@ export default function HomePage() {
       const data = await res.json();
       if (res.ok) {
         const backendUserId = data.usuario_id;
+        const realNickname = data.nickname || userContext.nickname;
         sessionStorage.setItem('room_token', data.token);
         sessionStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
         sessionStorage.setItem('room_type', selectedRoom.tipo);
         sessionStorage.setItem('user_id', backendUserId);
+        
         setUserId(backendUserId);
+        setNickname(realNickname);
         router.push(`/room/${selectedRoom.sala_id}`);
       } else {
         setJoinError(data.error || 'PIN incorrecto');
