@@ -248,10 +248,35 @@ func UnirseSalaHandler(c *gin.Context) {
 		return
 	}
 
+	clientIP := getRealIP(c)
+
+	// === CAPA 1: Verificar en Redis si esta IP ya tiene sesión activa ===
+	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+clientIP).Result()
+	if errRedis == nil && activeSession != "" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
+		})
+		return
+	}
+
+	// === CAPA 2: Verificar en MongoDB si esta IP ya tiene un usuario activo ===
+	var usuarioActivoPorIP modelos.Usuario
+	errIP := db.GetCollection("usuarios").FindOne(c.Request.Context(),
+		bson.M{"ip": clientIP, "activo": true}).Decode(&usuarioActivoPorIP)
+	if errIP == nil {
+		// Ya existe un usuario activo con esta IP - BLOQUEAR
+		fmt.Printf("BLOQUEO SESIÓN DUPLICADA: IP=%s ya activa como '%s' en sala '%s'\n",
+			clientIP, usuarioActivoPorIP.Nickname, usuarioActivoPorIP.SalaID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
+		})
+		return
+	}
+
 	var usuarioExistente modelos.Usuario
 	err = db.GetCollection("usuarios").FindOne(c.Request.Context(),
 		bson.M{"device_id": req.DeviceID}).Decode(&usuarioExistente)
-	fmt.Printf("=== DEPURACIÓN UNIRSE SALA ===\nDeviceID: %s\nError búsqueda usuario: %v\n", req.DeviceID, err)
+	fmt.Printf("=== DEPURACIÓN UNIRSE SALA ===\nDeviceID: %s\nIP: %s\nError búsqueda usuario: %v\n", req.DeviceID, clientIP, err)
 	var usuarioID string
 	var nickname string
 	var isNewUser bool
@@ -263,10 +288,10 @@ func UnirseSalaHandler(c *gin.Context) {
 		usuarioID = usuarioExistente.UsuarioID
 		previousRoom = usuarioExistente.SalaID
 
-		// Verificar si ya está activo en otra sala
-		if usuarioExistente.Activo && usuarioExistente.SalaID != "" && usuarioExistente.SalaID != req.SalaID {
+		// Verificar si ya está activo en cualquier sala (misma o diferente)
+		if usuarioExistente.Activo && usuarioExistente.SalaID != "" {
 			c.JSON(http.StatusConflict, gin.H{
-				"error": "Ya tienes una sesión activa en la sala: " + usuarioExistente.SalaID + ". Por favor, sal de esa sala primero.",
+				"error": "Ya tienes una sesión activa en la sala: " + usuarioExistente.SalaID + ". Cierra esa sesión primero.",
 			})
 			return
 		}

@@ -1,0 +1,166 @@
+Universidad de las Fuerzas Armadas ESPE
+Departamento de Ciencias de la Computaci´ on
+Carrera de Ingenier´ ıa en Software
+Aplicaciones Distribuidas
+Proyecto Integrador Parcial I
+Docente: Geovanny Cudco
+22 de abril de 2026
+1 Tema
+Sistema de Chat en tiempo real con salas seguras.
+2 Descripci´ on General:
+Desarrollar un aplicativo de chat en tiempo real que permita la gesti´ on de salas de
+conversaci´ on seguras y colaborativas. La aplicaci´ on debe contar con un backend para
+manejar la l´ ogica del servidor, la autenticaci´ on (opcional), la persistencia de datos y
+la comunicaci´ on en tiempo real, y un frontend para la interfaz de usuario intuitiva y
+responsiva.
+El enfoque principal es la creaci´ on y gesti´ on de salas de chat por parte de un
+administrador, con acceso controlado para usuarios mediante PINs, y soporte para dos
+tipos de salas: texto (solo mensajes) y multimedia (mensajes m´ as subida de archivos). El
+sistema debe implementar hilos (threads) para manejar la concurrencia en operaciones
+como la autenticaci´ on, la creaci´ on de salas y la transmisi´ on de mensajes en tiempo real,
+asegurando escalabilidad y rendimiento sin bloqueos.
+Los usuarios solo podr´ an unirse a una sala de chat a la vez desde un solo dispositivo
+(ordenador), lo que se verificar´ a mediante un mecanismo de sesi´ on ´ unica por IP o
+dispositivo. El proyecto debe priorizar la seguridad (autenticaci´ on, validaci´ on de PINs
+y nicknames), la usabilidad y la comunicaci´ on bidireccional en tiempo real.
+1
+3 Requisitos
+3.1 Requisitos funcionales
+1.Autenticaci´ on de Administrador:El administrador ingresa al sistema mediante
+credenciales (usuario y contrase˜ na). Una vez autenticado, puede crear m´ ultiples
+salas de chat.
+2.Creaci´ on de Salas:Cada sala debe tener un ID ´ unico (generado autom´ aticamente)
+y un PIN de acceso (de al menos 4 d´ ıgitos). Al crear una sala, el administrador
+selecciona el tipo:
+Texto: Solo permite env´ ıo de mensajes de texto.
+Multimedia: Permite env´ ıo de mensajes de texto y subida de archivos
+(im´ agenes, PDFs, etc., con l´ ımite de tama˜ no configurable, ej. 10MB).
+3.Acceso de Usuarios:Los usuarios ingresan proporcionando el PIN de la sala y
+un nickname ´ unico dentro de la sala. No se requiere registro; el acceso es an´ onimo
+pero limitado a una sala por dispositivo.
+4.Funcionalidades en Sala:
+Env´ ıo y recepci´ on de mensajes en tiempo real.
+En salas multimedia, subida y visualizaci´ on de archivos compartidos.
+Lista de usuarios conectados en la sala (visibles por nickname).
+Desconexi´ on autom´ atica al cerrar el navegador o inactividad prolongada.
+5.Gesti´ on de Concurrencia y Seguridad:Utiliza hilos (threads) para manejar
+operaciones as´ ıncronas, como:
+Procesamiento de autenticaciones concurrentes.
+Transmisi´ on de mensajes a m´ ultiples usuarios sin bloquear el servidor.
+Manejo de subidas de archivos en paralelo.
+3.2 Requisitos no funcionales
+1.Tiempo Real:Actualizaciones instant´ aneas de mensajes (latencia<1 segundo).
+2.Escalabilidad:Soporte para al menos 50 usuarios simult´ aneos por sala.
+3.Seguridad:PINs encriptados, validaci´ on de entradas para prevenir inyecciones, y
+sesiones ´ unicas por dispositivo.
+4.Interfaz:Frontend responsivo (web-based), con dise˜ no simple y accesible.
+5.Documentaci´ on:Incluye un README con instrucciones de instalaci´ on, uso y
+diagrama de arquitectura.
+2
+4 Criterios de Evaluaci´ on
+La presente actividad ser´ a evaluada sobre un total de 20 puntos, distribuidos seg´ un
+los siguientes criterios:
+Tabla 1: R´ ubrica de Evaluaci´ on del Proyecto de Comunicaci´ on en Tiempo Real
+Criterio Descripci´ on y Puntuaci´ on
+1. Enunciado y Documentaci´ on
+(2 puntos)
+Claridad del README (1 punto) 1: Describe claramente el proyecto, requisitos,
+instalaci´ on y uso.
+0.5: Descripci´ on incompleta o confusa.
+0: Sin documentaci´ on adecuada.
+Arquitectura (1 punto) 1: Incluye diagrama de arquitectura funcional y
+actualizado.
+0.5: Diagrama parcial o desactualizado.
+0: No incluye diagrama.
+2. Autenticaci´ on y Creaci´ on de
+Salas (4 puntos)
+Login de administrador (2 puntos) 2: Funcional y seguro, con validaci´ on de
+credenciales.
+1: Funciona parcialmente o con errores menores.
+0: No funcional.
+Gesti´ on de salas (2 puntos) 2: Permite crear salas con ID ´ unico, PIN y tipos
+(texto/multimedia).
+1: Creaci´ on funcional pero sin validaciones o sin
+tipos.
+0: No crea salas correctamente.
+3. Acceso de Usuarios (3
+puntos)
+Ingreso mediante PIN/nickname (2
+puntos)2: Funciona correctamente con validaci´ on de
+unicidad por dispositivo.
+1: Presenta fallos de validaci´ on o errores
+intermitentes.
+0: No permite acceso adecuado.
+Manejo de errores (1 punto) 1: Informa errores de acceso de forma clara.
+0.5: Mensajes poco informativos.
+0: Sin manejo de errores.
+4. Comunicaci´ on en Tiempo
+Real (4 puntos)
+Contin´ ua en la siguiente p´ agina
+3
+Cuadro 1 –continuaci´ on de la p´ agina anterior
+Criterio Descripci´ on y Puntuaci´ on
+Mensajer´ ıa (2 puntos) 2: Env´ ıo y recepci´ on de mensajes v´ ıa WebSockets
+totalmente funcional.
+1: Comunicaci´ on parcial o con retrasos.
+0: No hay comunicaci´ on en tiempo real.
+Rendimiento y concurrencia (2
+puntos)2: Broadcast eficiente con hilos concurrentes
+estables.
+1: Concurrencia limitada o errores bajo carga.
+0: No usa hilos o el sistema se bloquea.
+5. Funcionalidades Multimedia
+(3 puntos)
+Subida de archivos (2 puntos) 2: Permite subir archivos y visualizarlos
+correctamente en salas multimedia.
+1: Subida funcional pero sin validaciones o
+visualizaci´ on.
+0: No implementa subida de archivos.
+Validaciones (1 punto) 1: Aplica l´ ımites de tama˜ no y tipo de archivo.
+0.5: Validaciones parciales.
+0: Sin validaciones.
+6. Backend y Frontend (2
+puntos)
+Arquitectura (1 punto) 1: Separaci´ on clara entre l´ ogica de negocio
+(backend) y presentaci´ on (frontend).
+0.5: Capas parcialmente acopladas.
+0: Sin separaci´ on de capas.
+Dise˜ no responsivo (1 punto) 1: Interfaz responsiva y funcional en diferentes
+dispositivos.
+0.5: Problemas menores de visualizaci´ on.
+0: No responsivo.
+7. Pruebas y Escalabilidad (2
+puntos)
+Cobertura de pruebas (1 punto) 1: Cobertura superior al 70 % con casos variados.
+0.5: Cobertura limitada o sin m´ etricas claras.
+0: Sin pruebas unitarias.
+Rendimiento bajo carga (1 punto) 1: Soporta m´ as de 50 usuarios simulados sin
+ca´ ıdas.
+0.5: Inestabilidad leve bajo carga.
+0: Colapsa con m´ ultiples usuarios.
+4
+5 Fecha de entrega
+6 Entregables
+C´ odigo fuente completo (backend y frontend) en un repositorio Git.
+Diagramas de secuencia (ver abajo).
+Pruebas unitarias para al menos el 70 % de cobertura.
+Despliegue local (ej. Docker opcional).
+Este proyecto fomenta el aprendizaje en programaci´ on concurrente, WebSockets para
+tiempo real y arquitectura cliente-servidor.
+7 Tecnolog´ ıas sugeridas
+El estudiante puede elegir libremente las tecnolog´ ıas que mejor se adapten a sus
+habilidades y preferencias, siempre priorizando herramientas open-source y compatibles
+con hilos para concurrencia. Aqu´ ı van algunas sugerencias:
+Backend:Node.js con Express (para API REST) y Socket.io (para WebSockets
+en tiempo real). Usa hilos nativos de Node (Worker Threads) o un framework
+como NestJS para manejar concurrencia. Alternativas: Python con Flask y
+asyncio/Threading, o Java con Spring Boot y Threads.
+Frontend:React.js o Vue.js para la interfaz din´ amica, con bibliotecas como
+Socket.io-client para conexi´ on en tiempo real. Para subida de archivos, usa Axios o
+Fetch API.
+Base de Datos:MongoDB (NoSQL para flexibilidad en mensajes) o PostgreSQL
+(SQL para relaciones estrictas como salas-usuarios).
+Autenticaci´ on y Seguridad:JWT para tokens de sesi´ on; bcrypt para hashing de
+contrase˜ nas. Para sesiones ´ unicas por dispositivo, usa Redis para caching de IPs.
+Despliegue:Docker para contenedores; Heroku o Vercel para hosting gratuito.
+5

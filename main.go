@@ -12,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
@@ -28,6 +30,28 @@ func main() {
 	// Limpiar usuarios fantasma de sesiones anteriores (útil en desarrollo)
 	collection := db.GetCollection("usuarios")
 	collection.UpdateMany(context.Background(), bson.M{}, bson.M{"$set": bson.M{"activo": false}})
+
+	// Limpiar sesiones activas de Redis (stale keys de ejecuciones anteriores)
+	iter := db.RedisClient.Scan(context.Background(), 0, "device_active_session:*", 100).Iterator()
+	for iter.Next(context.Background()) {
+		db.RedisClient.Del(context.Background(), iter.Val())
+	}
+	log.Println("Sesiones anteriores limpiadas (MongoDB + Redis)")
+
+	// Crear índice único parcial: solo puede existir 1 IP activa a la vez
+	indexModel := mongo.IndexModel{
+		Keys: bson.D{{Key: "ip", Value: 1}},
+		Options: options.Index().
+			SetUnique(true).
+			SetPartialFilterExpression(bson.M{"activo": true}).
+			SetName("unique_active_ip"),
+	}
+	_, errIdx := collection.Indexes().CreateOne(context.Background(), indexModel)
+	if errIdx != nil {
+		log.Printf("Aviso índice único IP: %v (puede que ya exista)", errIdx)
+	} else {
+		log.Println("Índice único parcial (ip + activo:true) creado/verificado")
+	}
 
 	// Crear hub central de WebSocket
 	hub := sockets.Nuevo_Hub()
