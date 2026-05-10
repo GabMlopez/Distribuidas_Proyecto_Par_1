@@ -44,48 +44,77 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchDeviceId = async () => {
       try {
-        // Generar una Huella de Hardware (Hard Fingerprint) estricta
-        // Esto NO depende del almacenamiento del navegador, por lo que será idéntico en Incógnito.
+        // ============================================================
+        // HUELLA DE DISPOSITIVO ESTABLE (funciona igual en Incógnito)
+        // ============================================================
+        // Chrome bloquea WEBGL_debug_renderer_info en modo incógnito,
+        // por eso usamos Canvas Fingerprinting + propiedades de hardware
+        // que son idénticas en ambos modos.
+        // ============================================================
         let hardwareInfo = '';
-        
-        // 1. Extraer el modelo exacto de la Tarjeta Gráfica (GPU) mediante WebGL
+
+        // 1. Canvas Fingerprint: dibujamos texto y formas en un canvas.
+        //    El resultado depende de la GPU, motor de renderizado de fuentes
+        //    y SO — pero NO cambia entre modo normal e incógnito.
         try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            if (gl) {
-                const debugInfo = (gl as any).getExtension('WEBGL_debug_renderer_info');
-                const vendor = debugInfo ? (gl as any).getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : 'unk_v';
-                const renderer = debugInfo ? (gl as any).getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : 'unk_r';
-                hardwareInfo += `${vendor}_${renderer}_`;
-            }
-        } catch (e) {}
+          const canvas = document.createElement('canvas');
+          canvas.width = 260;
+          canvas.height = 60;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.textBaseline = 'top';
+            // Bloque de color
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            // Texto con sombra
+            ctx.fillStyle = '#069';
+            ctx.fillText('DeviceFingerprint!@#', 2, 15);
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.fillText('DeviceFingerprint!@#', 4, 17);
+            // Arco
+            ctx.beginPath();
+            ctx.arc(50, 50, 10, 0, Math.PI * 2, true);
+            ctx.closePath();
+            ctx.fill();
+            // Convertir a Data URL (la salida es determinista para el mismo HW)
+            hardwareInfo += canvas.toDataURL();
+          }
+        } catch (e) { /* canvas no disponible */ }
 
-        // 2. Extraer CPU, Memoria RAM y Sistema Operativo
-        const cores = navigator.hardwareConcurrency || 'unk_c';
-        const ram = (navigator as any).deviceMemory || 'unk_m';
-        const platform = navigator.platform || 'unk_p';
-        
-        // 3. Extraer Resolución de Pantalla y Profundidad de Color
-        const screen = `${window.screen.width}x${window.screen.height}_${window.screen.colorDepth}`;
+        // 2. Propiedades de hardware (idénticas en incógnito)
+        const cores = navigator.hardwareConcurrency || 0;
+        const ram = (navigator as any).deviceMemory || 0;
+        const platform = navigator.platform || '';
+        const screenInfo = `${window.screen.width}x${window.screen.height}_${window.screen.colorDepth}`;
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
 
-        // Unir toda la información del hardware físico
-        hardwareInfo += `${cores}_${ram}_${platform}_${screen}`;
+        hardwareInfo += `|${cores}_${ram}_${platform}_${screenInfo}_${timezone}`;
 
-        // Convertir la cadena de hardware en un Hash numérico simple (32-bit)
-        let hash = 0;
+        // 3. Generar hash estable de 53 bits (mejor distribución que 32-bit)
+        let h1 = 0xdeadbeef;
+        let h2 = 0x41c6ce57;
         for (let i = 0; i < hardwareInfo.length; i++) {
-            const char = hardwareInfo.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash;
+          const ch = hardwareInfo.charCodeAt(i);
+          h1 = Math.imul(h1 ^ ch, 2654435761);
+          h2 = Math.imul(h2 ^ ch, 1597334677);
         }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+        h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+        h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        const fullHash = 4294967296 * (2097151 & h2) + (h1 >>> 0);
 
-        const finalDeviceId = `hw_${Math.abs(hash)}`;
+        const finalDeviceId = `hw_${fullHash}`;
+        localStorage.setItem('deviceId', finalDeviceId);
         sessionStorage.setItem('deviceId', finalDeviceId);
+
+        // Log para depuración (puedes verificar que sea idéntico en incógnito)
+        console.log('[DeviceFingerprint] ID generado:', finalDeviceId);
 
         setUserContext(prev => ({
           ...prev,
           deviceId: finalDeviceId,
-          isAdmin: true
         }));
       } catch (error) {
         console.error("Error generando Hardware Fingerprint", error);
@@ -94,7 +123,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserContext(prev => ({
           ...prev,
           deviceId: fallbackId,
-          isAdmin: true  
         }));
       }
     };

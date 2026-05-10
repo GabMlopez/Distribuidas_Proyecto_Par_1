@@ -39,7 +39,16 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		return
 	}
 
-	clientIP := c.ClientIP()
+	clientIP := getRealIP(c) // Usar getRealIP para normalizar ::1 → 127.0.0.1
+
+	// === CAPA DEFINITIVA: Verificar si este DeviceID o esta IP ya tiene un WebSocket activo ===
+	// Bloquea: misma pestaña, incógnito, Y otro navegador en la misma máquina.
+	if hub.IsDeviceOrIPConnected(deviceID, clientIP) {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Este dispositivo ya tiene una conexión activa. Solo se permite una sesión por dispositivo.",
+		})
+		return
+	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -47,8 +56,8 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		return
 	}
 
-	// Validar que el dispositivo (IP) no tenga otra sesión activa (usando Redis)
-	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+clientIP).Result()
+	// Validar que el dispositivo no tenga otra sesión activa (usando Redis)
+	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+deviceID).Result()
 	if errRedis == nil && activeSession != "" {
 		expectedSession := nickname + "|" + salaID
 		if activeSession != expectedSession {

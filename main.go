@@ -38,19 +38,22 @@ func main() {
 	}
 	log.Println("Sesiones anteriores limpiadas (MongoDB + Redis)")
 
-	// Crear índice único parcial: solo puede existir 1 IP activa a la vez
+	// Eliminar índice antiguo basado en IP si existe
+	_, _ = collection.Indexes().DropOne(context.Background(), "unique_active_ip")
+
+	// Crear índice único parcial: solo puede existir 1 DeviceID activo a la vez
 	indexModel := mongo.IndexModel{
-		Keys: bson.D{{Key: "ip", Value: 1}},
+		Keys: bson.D{{Key: "device_id", Value: 1}},
 		Options: options.Index().
 			SetUnique(true).
 			SetPartialFilterExpression(bson.M{"activo": true}).
-			SetName("unique_active_ip"),
+			SetName("unique_active_device_id"),
 	}
 	_, errIdx := collection.Indexes().CreateOne(context.Background(), indexModel)
 	if errIdx != nil {
-		log.Printf("Aviso índice único IP: %v (puede que ya exista)", errIdx)
+		log.Printf("Aviso índice único DeviceID: %v (puede que ya exista)", errIdx)
 	} else {
-		log.Println("Índice único parcial (ip + activo:true) creado/verificado")
+		log.Println("Índice único parcial (device_id + activo:true) creado/verificado")
 	}
 
 	// Crear hub central de WebSocket

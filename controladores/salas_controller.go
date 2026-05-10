@@ -250,8 +250,17 @@ func UnirseSalaHandler(c *gin.Context) {
 
 	clientIP := getRealIP(c)
 
-	// === CAPA 1: Verificar en Redis si esta IP ya tiene sesión activa ===
-	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+clientIP).Result()
+	// === CAPA 0: Verificar en el Hub si ya hay un WebSocket activo para este dispositivo/IP ===
+	// Esto bloquea ANTES de cualquier registro: otro navegador, incógnito, pestaña duplicada.
+	if hub.IsDeviceOrIPConnected(req.DeviceID, clientIP) {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": "Este dispositivo ya tiene una conexión activa. Solo se permite una sesión por dispositivo.",
+		})
+		return
+	}
+
+	// === CAPA 1: Verificar en Redis si este DeviceID ya tiene sesión activa ===
+	activeSession, errRedis := db.RedisClient.Get(c.Request.Context(), "device_active_session:"+req.DeviceID).Result()
 	if errRedis == nil && activeSession != "" {
 		expectedSession := req.Nickname + "|" + req.SalaID
 		if activeSession != expectedSession {
@@ -262,15 +271,15 @@ func UnirseSalaHandler(c *gin.Context) {
 		}
 	}
 
-	// === CAPA 2: Verificar en MongoDB si esta IP ya tiene un usuario activo ===
-	var usuarioActivoPorIP modelos.Usuario
-	errIP := db.GetCollection("usuarios").FindOne(c.Request.Context(),
-		bson.M{"ip": clientIP, "activo": true}).Decode(&usuarioActivoPorIP)
-	if errIP == nil {
-		if usuarioActivoPorIP.Nickname != req.Nickname || usuarioActivoPorIP.SalaID != req.SalaID {
-			// Ya existe un usuario activo con esta IP - BLOQUEAR
-			fmt.Printf("BLOQUEO SESIÓN DUPLICADA: IP=%s ya activa como '%s' en sala '%s'\n",
-				clientIP, usuarioActivoPorIP.Nickname, usuarioActivoPorIP.SalaID)
+	// === CAPA 2: Verificar en MongoDB si este DeviceID ya tiene un usuario activo ===
+	var usuarioActivoPorDevice modelos.Usuario
+	errDevice := db.GetCollection("usuarios").FindOne(c.Request.Context(),
+		bson.M{"device_id": req.DeviceID, "activo": true}).Decode(&usuarioActivoPorDevice)
+	if errDevice == nil {
+		if usuarioActivoPorDevice.Nickname != req.Nickname || usuarioActivoPorDevice.SalaID != req.SalaID {
+			// Ya existe un usuario activo con este DeviceID - BLOQUEAR
+			fmt.Printf("BLOQUEO SESIÓN DUPLICADA: DeviceID=%s ya activa como '%s' en sala '%s'\n",
+				req.DeviceID, usuarioActivoPorDevice.Nickname, usuarioActivoPorDevice.SalaID)
 			c.JSON(http.StatusConflict, gin.H{
 				"error": "Este dispositivo ya tiene una sesión activa en otra sala o con otro usuario.",
 			})
@@ -452,8 +461,14 @@ func DejarSalaHandler(c *gin.Context) {
 		update)
 
 	// Limpiar sesión en Redis si existe
-	clientIP := getRealIP(c)
-	db.RedisClient.Del(c.Request.Context(), "device_active_session:"+clientIP)
+	// Requiere que busquemos primero el dispositivo del usuario para saber su DeviceID,
+	// pero en 'DejarSalaHandler' solo tenemos usuario_id y sala_id.
+	// Vamos a recuperar el DeviceID del usuario para limpiar correctamente Redis.
+	var usuario modelos.Usuario
+	errBuscar := db.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": req.UsuarioID}).Decode(&usuario)
+	if errBuscar == nil && usuario.DeviceID != "" {
+		db.RedisClient.Del(c.Request.Context(), "device_active_session:"+usuario.DeviceID)
+	}
 
 	if result.MatchedCount == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "El usuario no se encuentra en esa sala"})

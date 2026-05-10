@@ -57,8 +57,8 @@ func (h *Hub) Run() {
 				bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
 				bson.M{"$set": bson.M{"activo": true, "last_active": time.Now()}})
 
-			// Registrar en Redis la sesión activa del dispositivo (por IP) con caducidad de seguridad (24h)
-			h.RedisClient.Set(h.ctx, "device_active_session:"+client.Ip, client.Nickname+"|"+client.SalaId, 24*time.Hour)
+			// Registrar en Redis la sesión activa del dispositivo (por DeviceID) con caducidad de seguridad (24h)
+			h.RedisClient.Set(h.ctx, "device_active_session:"+client.DeviceId, client.Nickname+"|"+client.SalaId, 24*time.Hour)
 			h.notifyUserList(client.SalaId)
 			// Notificar que alguien se unió
 			go func(c *Cliente) {
@@ -124,24 +124,24 @@ func (h *Hub) Run() {
 					log.Printf("Error marcando usuario %s como inactivo: %v", c.Nickname, err)
 				}
 
-				// Verificar si la IP aún tiene otra conexión activa antes de borrar Redis
+				// Verificar si el DeviceID aún tiene otra conexión activa antes de borrar Redis
 				h.mutex.RLock()
-				ipStillActive := false
+				deviceStillActive := false
 				for _, clients := range h.Salas {
 					for activeClient := range clients {
-						if activeClient.Ip == c.Ip {
-							ipStillActive = true
+						if activeClient.DeviceId == c.DeviceId {
+							deviceStillActive = true
 							break
 						}
 					}
-					if ipStillActive {
+					if deviceStillActive {
 						break
 					}
 				}
 				h.mutex.RUnlock()
 
-				if !ipStillActive {
-					h.RedisClient.Del(h.ctx, "device_active_session:"+c.Ip)
+				if !deviceStillActive {
+					h.RedisClient.Del(h.ctx, "device_active_session:"+c.DeviceId)
 				}
 
 				// Notificar usuarios actualizados
@@ -267,4 +267,22 @@ func (h *Hub) GetRoomUserCount(roomID string) int {
 		return len(clients)
 	}
 	return 0
+}
+
+// IsDeviceOrIPConnected verifica si un DeviceId O una IP ya tienen una conexión
+// WebSocket activa en cualquier sala. Esto bloquea:
+// - Misma pestaña/incógnito (mismo DeviceID por Canvas Fingerprint)
+// - Diferente navegador en la misma máquina (misma IP local)
+func (h *Hub) IsDeviceOrIPConnected(deviceId string, ip string) bool {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	for _, clients := range h.Salas {
+		for client := range clients {
+			if client.DeviceId == deviceId || client.Ip == ip {
+				return true
+			}
+		}
+	}
+	return false
 }
