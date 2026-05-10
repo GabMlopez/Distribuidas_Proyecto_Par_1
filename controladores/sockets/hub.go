@@ -123,6 +123,28 @@ func (h *Hub) Run() {
 				if err != nil {
 					log.Printf("Error marcando usuario %s como inactivo: %v", c.Nickname, err)
 				}
+			h.mutex.Lock()
+			// Determinar si este dispositivo tiene otras conexiones activas
+			deviceTieneMasConexiones := false
+			if clients, ok := h.Salas[client.SalaId]; ok {
+				if _, ok := clients[client]; ok {
+					delete(clients, client)
+					close(client.Envio)
+
+					// Marcar como inactivo en MongoDB
+					collection := db.GetCollection("usuarios")
+					_, err := collection.UpdateOne(h.ctx,
+						bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
+						bson.M{
+							"$set": bson.M{
+								"activo":      false,
+								"left_at":     time.Now(),
+								"last_active": time.Now(),
+							},
+						})
+					if err != nil {
+						log.Printf("Error marcando usuario %s como inactivo: %v", client.Nickname, err)
+					}
 
 				// Verificar si la IP aún tiene otra conexión activa antes de borrar Redis
 				h.mutex.RLock()
@@ -172,6 +194,7 @@ func (h *Hub) Run() {
 				}(message)
 			}
 
+			// Publicar en Redis. La distribución local ocurrirá en listenRedis
 			// Publicar en Redis. La distribución local ocurrirá en listenRedis
 			h.publishToRedis(message)
 		}
