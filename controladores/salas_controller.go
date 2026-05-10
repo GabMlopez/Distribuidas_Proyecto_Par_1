@@ -546,3 +546,42 @@ func generateUserID() string {
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
 }
+
+func GetMessagesHandler(c *gin.Context) {
+	roomId := c.Param("roomId")
+	if roomId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "roomId es requerido"})
+		return
+	}
+
+	collection := db.GetCollection("mensajes")
+	// Obtener los últimos 100 mensajes, ordenados por timestamp ascendente
+	findOptions := options.Find()
+	findOptions.SetSort(bson.D{{Key: "timestamp", Value: -1}})
+	findOptions.SetLimit(100)
+
+	cursor, err := collection.Find(c.Request.Context(), bson.M{"sala_id": roomId}, findOptions)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error obteniendo mensajes"})
+		return
+	}
+	defer cursor.Close(c.Request.Context())
+
+	var mensajes []modelos.Mensaje
+	if err = cursor.All(c.Request.Context(), &mensajes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando mensajes"})
+		return
+	}
+
+	// Como los obtuvimos ordenados descendentemente (para tener los más recientes),
+	// los invertimos para devolverlos en orden cronológico ascendente.
+	for i, j := 0, len(mensajes)-1; i < j; i, j = i+1, j-1 {
+		mensajes[i], mensajes[j] = mensajes[j], mensajes[i]
+	}
+
+	if mensajes == nil {
+		mensajes = make([]modelos.Mensaje, 0)
+	}
+
+	c.JSON(http.StatusOK, mensajes)
+}

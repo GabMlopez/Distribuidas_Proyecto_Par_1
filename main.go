@@ -123,6 +123,7 @@ func main() {
 		roomRoutes.GET("/list", controladores.ListaSalas)
 		roomRoutes.POST("/join", controladores.UnirseSalaHandler)
 		roomRoutes.POST("/leave", controladores.DejarSalaHandler)
+		roomRoutes.GET("/:roomId/messages", controladores.GetMessagesHandler)
 	}
 
 	// WebSocket

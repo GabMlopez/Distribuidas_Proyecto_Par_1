@@ -123,6 +123,20 @@ func (h *Hub) Run() {
 			log.Printf("Cliente %s desconectado de sala %s", client.Nickname, client.SalaId)
 
 		case message := <-h.Broadcast:
+			// Guardar en MongoDB los mensajes que representan contenido (chat o multimedia)
+			if message.Tipo == "chat" || message.Tipo == "multimedia" {
+				go func(msg Mensaje) {
+					collection := db.GetCollection("mensajes")
+					if msg.Timestamp == 0 {
+						msg.Timestamp = time.Now().Unix()
+					}
+					_, err := collection.InsertOne(context.Background(), msg)
+					if err != nil {
+						log.Printf("Error persistiendo mensaje en MongoDB: %v", err)
+					}
+				}(message)
+			}
+
 			// Publicar en Redis. La distribución local ocurrirá en listenRedis
 			h.publishToRedis(message)
 		}

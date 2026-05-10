@@ -38,6 +38,19 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
+    // Cargar historial de mensajes
+    fetch(`${API}/rooms/${roomId}/messages`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setMessages(data);
+          setTimeout(() => { 
+            if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight; 
+          }, 100);
+        }
+      })
+      .catch(err => console.error('Error fetching message history:', err));
+
     setWsStatus('connecting');
     const wsProtocol = API.startsWith('https') ? 'wss' : 'ws';
     const wsHost = API.replace(/^https?:\/\//, '');
