@@ -33,13 +33,24 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    if (!userContext?.nickname) {
+    // Usamos sessionStorage como respaldo para no redirigir prematuramente al login.
+    const localNickname = typeof window !== 'undefined' ? sessionStorage.getItem('nickname') : null;
+    const currentNickname = userContext?.nickname || localNickname || '';
+
+    if (!currentNickname) {
       router.push('/'); 
       return;
     }
 
-    // Cargar historial de mensajes
-    fetch(`${API}/rooms/${roomId}/messages`)
+    // Esperar a que el deviceId se haya generado/rehidratado
+    const localDeviceId = typeof window !== 'undefined' ? sessionStorage.getItem('deviceId') : null;
+    const currentDeviceId = userContext?.deviceId || localDeviceId;
+    if (!currentDeviceId) {
+      return;
+    }
+
+    // Cargar historial de mensajes (sin caché para asegurar frescura al F5)
+    fetch(`${API}/rooms/${roomId}/messages?t=${Date.now()}`, { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -54,7 +65,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     setWsStatus('connecting');
     const wsProtocol = API.startsWith('https') ? 'wss' : 'ws';
     const wsHost = API.replace(/^https?:\/\//, '');
-    const url = `${wsProtocol}://${wsHost}/ws/${roomId}?nickname=${encodeURIComponent(userContext.nickname)}&sala_id=${roomId}&device_id=${userContext.deviceId}`;
+    const url = `${wsProtocol}://${wsHost}/ws/${roomId}?nickname=${encodeURIComponent(currentNickname)}&sala_id=${roomId}&device_id=${currentDeviceId}`;
     
     const websocket = new WebSocket(url);
     websocket.onopen = () => setWsStatus('open');

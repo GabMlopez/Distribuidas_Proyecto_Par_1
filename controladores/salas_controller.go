@@ -537,7 +537,7 @@ func ListaSalas(c *gin.Context) {
 		return
 	}
 
-	var response []RoomResponse
+	response := make([]RoomResponse, 0)
 	for _, sala := range salas {
 		response = append(response, RoomResponse{
 			SalaID:   sala.SalaID,

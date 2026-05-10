@@ -21,24 +21,25 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [userContext, setUserContext] = useState<UserContextState>(() => {
-    if (typeof window !== 'undefined') {
-      return {
-        token: sessionStorage.getItem('token'),
-        nickname: sessionStorage.getItem('nickname') || '',
-        deviceId: '',
-        userId: sessionStorage.getItem('userId') || '',
-        isAdmin: sessionStorage.getItem('isAdmin') === 'true'
-      };
-    }
-    return {
-      token: null,
-      nickname: '',
-      deviceId: '',
-      userId: '',
-      isAdmin: false
-    };
+  const [userContext, setUserContext] = useState<UserContextState>({
+    token: null,
+    nickname: '',
+    deviceId: '',
+    userId: '',
+    isAdmin: false
   });
+
+  useEffect(() => {
+    // Hidratación controlada post-render
+    setUserContext(prev => ({
+      ...prev,
+      token: sessionStorage.getItem('token'),
+      nickname: sessionStorage.getItem('nickname') || '',
+      deviceId: sessionStorage.getItem('deviceId') || '',
+      userId: sessionStorage.getItem('userId') || '',
+      isAdmin: sessionStorage.getItem('isAdmin') === 'true'
+    }));
+  }, []);
 
   useEffect(() => {
     const fetchDeviceId = async () => {

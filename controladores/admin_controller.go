@@ -238,7 +238,7 @@ func GetAllSalasAdmin(c *gin.Context) {
 	}
 	defer cursor.Close(c.Request.Context())
 
-	var salas []modelos.Sala
+	salas := make([]modelos.Sala, 0)
 	if err = cursor.All(c.Request.Context(), &salas); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error decodificando salas"})
 		return
