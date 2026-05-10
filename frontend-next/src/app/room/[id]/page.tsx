@@ -106,15 +106,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
     setWs(websocket);
 
-    const handleBeforeUnload = () => {
-      const payload = JSON.stringify({ sala_id: roomId, nickname: userContext.nickname, device_id: userContext.deviceId });
-      navigator.sendBeacon(`${API}/rooms/leave`, new Blob([payload], { type: 'application/json' }));
-      websocket.close();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => { 
-      window.removeEventListener('beforeunload', handleBeforeUnload); 
       websocket.close(); 
     };
   }, [roomId, userContext, router]);

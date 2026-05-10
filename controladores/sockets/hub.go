@@ -51,6 +51,12 @@ func (h *Hub) Run() {
 			h.Salas[client.SalaId][client] = true
 			h.mutex.Unlock()
 
+			// Marcar como activo en MongoDB (útil si vienen de un refresh)
+			collection := db.GetCollection("usuarios")
+			collection.UpdateOne(h.ctx,
+				bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
+				bson.M{"$set": bson.M{"activo": true, "last_active": time.Now()}})
+
 			// Registrar en Redis la sesión activa del dispositivo (por IP) con caducidad de seguridad (24h)
 			h.RedisClient.Set(h.ctx, "device_active_session:"+client.Ip, client.Nickname+"|"+client.SalaId, 24*time.Hour)
 			h.notifyUserList(client.SalaId)

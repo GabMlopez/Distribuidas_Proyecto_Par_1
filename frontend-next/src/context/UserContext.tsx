@@ -20,12 +20,23 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [userContext, setUserContext] = useState<UserContextState>({
-    token: null,
-    nickname: '',
-    deviceId: '',
-    userId: '',
-    isAdmin: false
+  const [userContext, setUserContext] = useState<UserContextState>(() => {
+    if (typeof window !== 'undefined') {
+      return {
+        token: sessionStorage.getItem('token'),
+        nickname: sessionStorage.getItem('nickname') || '',
+        deviceId: '',
+        userId: sessionStorage.getItem('userId') || '',
+        isAdmin: sessionStorage.getItem('isAdmin') === 'true'
+      };
+    }
+    return {
+      token: null,
+      nickname: '',
+      deviceId: '',
+      userId: '',
+      isAdmin: false
+    };
   });
 
   useEffect(() => {
@@ -87,6 +98,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = (token: string | null, nickname: string, userId: string, isAdmin: boolean) => {
     setUserContext(prev => ({ ...prev, token, nickname: nickname , userId, isAdmin }));
+    sessionStorage.setItem('token', token || '');
+    sessionStorage.setItem('nickname', nickname);
+    sessionStorage.setItem('userId', userId);
+    sessionStorage.setItem('isAdmin', String(isAdmin));
   };
 
   const logout = () => {
@@ -97,6 +112,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
       userId: '',
       isAdmin: false
     }));
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('nickname');
+    sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('isAdmin');
+    sessionStorage.removeItem('room_name');
+    sessionStorage.removeItem('room_type');
+    sessionStorage.removeItem('room_token');
   };
 
   const setUserId = (userId: string) => {

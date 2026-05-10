@@ -32,7 +32,6 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		"sala_id":   salaID,
 		"nickname":  nickname,
 		"device_id": deviceID,
-		"activo":    true,
 	})
 
 	if err != nil || count == 0 {
