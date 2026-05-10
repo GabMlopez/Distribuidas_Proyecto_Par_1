@@ -16,9 +16,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
   const { userContext } = useUser();
 
-  const [roomName, setRoomName] = useState(roomId);
-  const [roomType, setRoomType] = useState('texto');
-  const [roomToken, setRoomToken] = useState('');
+  const [roomName, setRoomName] = useState(() => typeof window !== 'undefined' ? sessionStorage.getItem('room_name') || roomId : roomId);
+  const [roomType, setRoomType] = useState(() => typeof window !== 'undefined' ? sessionStorage.getItem('room_type') || 'texto' : 'texto');
+  const [roomToken, setRoomToken] = useState(() => typeof window !== 'undefined' ? sessionStorage.getItem('room_token') || '' : '');
 
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [messages, setMessages] = useState<MsgType[]>([]);
@@ -37,9 +37,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       router.push('/'); 
       return;
     }
-    setRoomName(sessionStorage.getItem('room_name') || roomId);
-    setRoomType(sessionStorage.getItem('room_type') || 'texto');
-    setRoomToken(sessionStorage.getItem('room_token') || '');
 
     setWsStatus('connecting');
     const wsProtocol = API.startsWith('https') ? 'wss' : 'ws';

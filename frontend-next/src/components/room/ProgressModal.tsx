@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { UploadTask } from '@/types';
 
 interface UploadToastProps {
@@ -9,51 +8,11 @@ interface UploadToastProps {
 }
 
 export function UploadToast({ uploads, onRemove }: UploadToastProps) {
-  const [visibleToasts, setVisibleToasts] = useState<UploadTask[]>([]);
-
-  useEffect(() => {
-    const newUploads = uploads.filter(u => !visibleToasts.find(v => v.id === u.id));
-    if (newUploads.length > 0) {
-      setVisibleToasts(prev => [...prev, ...newUploads]);
-    }
-    
-    const updated = visibleToasts.map(toast => {
-      const updatedUpload = uploads.find(u => u.id === toast.id);
-      return updatedUpload || toast;
-    });
-    
-    if (JSON.stringify(visibleToasts) !== JSON.stringify(updated)) {
-      setVisibleToasts(updated);
-    }
-  }, [uploads]);
-
-  useEffect(() => {
-    const timeouts: NodeJS.Timeout[] = [];
-    
-    visibleToasts.forEach(toast => {
-      if (toast.done && !toast.error) {
-        const timeout = setTimeout(() => {
-          setVisibleToasts(prev => prev.filter(t => t.id !== toast.id));
-          onRemove(toast.id);
-        }, 2000);
-        timeouts.push(timeout);
-      } else if (toast.error) {
-        const timeout = setTimeout(() => {
-          setVisibleToasts(prev => prev.filter(t => t.id !== toast.id));
-          onRemove(toast.id);
-        }, 4000);
-        timeouts.push(timeout);
-      }
-    });
-    
-    return () => timeouts.forEach(clearTimeout);
-  }, [visibleToasts]);
-
-  if (visibleToasts.length === 0) return null;
+  if (uploads.length === 0) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-      {visibleToasts.map((toast) => (
+      {uploads.map((toast) => (
         <div
           key={toast.id}
           className="animate-slide-up bg-slate-900/95 backdrop-blur-md border border-white/20 rounded-xl shadow-2xl p-3 min-w-[280px] max-w-[320px]"
@@ -108,10 +67,7 @@ export function UploadToast({ uploads, onRemove }: UploadToastProps) {
             
             {/* Botón cerrar */}
             <button 
-              onClick={() => {
-                setVisibleToasts(prev => prev.filter(t => t.id !== toast.id));
-                onRemove(toast.id);
-              }}
+              onClick={() => onRemove(toast.id)}
               className="shrink-0 w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all flex items-center justify-center"
             >
               ✕
