@@ -276,17 +276,20 @@ func (h *Hub) GetRoomUserCount(roomID string) int {
 	return 0
 }
 
-// IsDeviceOrIPConnected verifica si un DeviceId O una IP ya tienen una conexión
+// IsSessionBlocked verifica si un DeviceId, Nickname o IP ya tienen una conexión
 // WebSocket activa en cualquier sala. Esto bloquea:
 // - Misma pestaña/incógnito (mismo DeviceID por Canvas Fingerprint)
-// - Diferente navegador en la misma máquina (misma IP local)
-func (h *Hub) IsDeviceOrNicknameConnected(deviceId string, nickname string) bool {
+// - Diferente navegador en la misma máquina (misma IP local de red)
+// - Mismo nickname desde cualquier lugar
+// En red local, cada dispositivo físico tiene IP única (192.168.100.X),
+// así que bloquear por IP NO afecta a otros dispositivos en la misma red.
+func (h *Hub) IsSessionBlocked(deviceId string, nickname string, ip string) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
 	for _, clients := range h.Salas {
 		for client := range clients {
-			if client.DeviceId == deviceId || client.Nickname == nickname {
+			if client.DeviceId == deviceId || client.Nickname == nickname || client.Ip == ip {
 				return true
 			}
 		}

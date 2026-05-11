@@ -250,10 +250,11 @@ func UnirseSalaHandler(c *gin.Context) {
 
 	clientIP := getRealIP(c)
 
-	// === CAPA 0: Verificar en el Hub si ya hay un WebSocket activo para este dispositivo o Nickname ===
-	if hub.IsDeviceOrNicknameConnected(req.DeviceID, req.Nickname) {
+	// === CAPA 0: Triple validación en Hub (DeviceID + Nickname + IP) ===
+	// En red local cada dispositivo tiene IP única → bloquea incógnito y otros navegadores
+	if hub.IsSessionBlocked(req.DeviceID, req.Nickname, clientIP) {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "⚠️ Bloqueo de Seguridad: El nombre '" + req.Nickname + "' ya está en uso, o tu navegador actual ya tiene una ventana de chat abierta. Cierra tus otras pestañas o elige otro nombre.",
+			"error": "⚠️ Bloqueo de Seguridad: Ya existe una sesión activa desde este dispositivo (IP: " + clientIP + "). No se permiten múltiples navegadores, pestañas ni modo incógnito simultáneamente.",
 		})
 		return
 	}

@@ -47,12 +47,12 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 
 	clientIP := getRealIP(c) // Usar getRealIP para normalizar ::1 → 127.0.0.1
 
-	// === CAPA DEFINITIVA: Verificar si este DeviceID o Nickname ya tiene un WebSocket activo ===
-	// Bloquea: misma pestaña, incógnito, o mismo usuario en otra máquina.
-	if hub.IsDeviceOrNicknameConnected(deviceID, nickname) {
+	// === CAPA DEFINITIVA: Triple validación (DeviceID + Nickname + IP) ===
+	// Bloquea: misma pestaña, incógnito, otro navegador en la misma máquina.
+	if hub.IsSessionBlocked(deviceID, nickname, clientIP) {
 		conn.WriteJSON(sockets.Mensaje{
 			Tipo:  "error",
-			Texto: "⚠️ Conexión Rechazada: Se detectó un intento de clonar la sesión o usar un nombre ocupado desde otra pestaña. Para mantener la integridad del chat, solo se permite una única ventana activa.",
+			Texto: "⚠️ Conexión Rechazada: Ya existe una sesión activa desde este dispositivo. No se permiten múltiples ventanas, pestañas, modo incógnito ni otros navegadores simultáneamente.",
 		})
 		conn.Close()
 		return
