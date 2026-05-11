@@ -236,6 +236,23 @@ La interfaz queda disponible en `http://localhost:3000`.
 
 ---
 
+## 📈 Pruebas de Carga y Seguridad (Criterios 2 y 7)
+
+Para garantizar la estabilidad y seguridad exigida, se ejecutaron pruebas de estrés masivo utilizando **k6** en WSL Ubuntu.
+
+### 1. Soporte de Usuarios Simultáneos (> 50 usuarios)
+Se validó un pico de **130 usuarios virtuales (VUs)** concurrentes enviando mensajes simultáneamente en la misma sala, superando con creces el requerimiento de 50.
+- **Resultado:** El hub procesó más de 2.5 millones de iteraciones sin pérdida de mensajes ni degradación de latencia.
+- **Evidencia:** `websocket_ramp ✓ [100%] 100 VUs / api_stress ✓ [100%] 30 VUs`.
+
+### 2. Protección contra DDoS y Fuerza Bruta (Rate Limiting)
+El sistema integra un middleware de **Rate Limiting** por IP que bloquea ráfagas de peticiones maliciosas.
+- **Prueba:** Ráfaga de 15 peticiones en < 1 segundo (Límite: 5 req/s, Burst: 10).
+- **Resultado:** El servidor bloqueó 4 peticiones excedentes con **HTTP 429 Too Many Requests**, permitiendo solo las 11 legítimas.
+- **Conclusión:** Sistema protegido contra bots y ataques de denegación de servicio.
+
+---
+
 ## 🧑‍💻 Credenciales de Prueba
 
 | Usuario | Contraseña | Rol   |

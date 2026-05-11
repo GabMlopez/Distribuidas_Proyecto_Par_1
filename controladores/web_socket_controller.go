@@ -57,12 +57,14 @@ func GetHistorialMensajes(c *gin.Context) {
 
 func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 	nickname := c.Query("nickname")
-	salaID := c.Query("sala_id")
+	salaID := c.Param("roomId") // Obtener param de la URL en vez de query
+	if salaID == "" {
+		salaID = c.Query("sala_id") // Fallback
+	}
 	deviceID := c.Query("device_id")
 
 	if nickname == "" || salaID == "" || deviceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nickname, sala_id y device_id requeridos"})
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nickname, roomId y device_id requeridos"})
 	}
 
 	collection := db.GetCollection("usuarios")

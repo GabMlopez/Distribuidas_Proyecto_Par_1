@@ -63,6 +63,7 @@ func main() {
 	r := gin.Default()
 	r.SetTrustedProxies(nil) // Fix: No confiar en todos los proxies por defecto (Seguridad)
 
+        r.Use(middleware.RateLimiter())
 	// Configurar CORS
 	r.Use(func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
