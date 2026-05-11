@@ -6,7 +6,8 @@ Sistema de mensajería distribuida con soporte para salas de texto y multimedia,
 
 ## 🏗️ Arquitectura
 
-```
+### Vista General (Contenedores)
+```text
 ┌─────────────────────────────┐
 │  Frontend (Next.js 15)       │  http://localhost:3000
 │  React 19 + TailwindCSS      │
@@ -21,6 +22,43 @@ Sistema de mensajería distribuida con soporte para salas de texto y multimedia,
 │  Infraestructura (Docker)    │
 │  MongoDB  · Redis · MinIO    │
 └─────────────────────────────┘
+```
+
+### Diagrama de Flujo del Sistema
+```mermaid
+graph TD
+    %% Clients
+    User[Web Client / Browser]
+
+    %% Frontend
+    subgraph Frontend [Frontend - Vercel / Next.js]
+        NextApp[Next.js App UI]
+    end
+
+    %% Backend
+    subgraph Backend [Backend - Render / Go]
+        API[Go API - Gin Framework]
+        WSHub[WebSocket Hub]
+    end
+
+    %% Storage & Databases
+    subgraph Databases [Data & Storage]
+        Mongo[(MongoDB)]
+        Redis[(Redis Pub/Sub)]
+        MinIO[(MinIO Object Storage)]
+    end
+
+    %% Connections
+    User -- HTTP / REST --> NextApp
+    NextApp -- REST API --> API
+    NextApp -- WebSocket --> WSHub
+
+    API -- CRUD Operations --> Mongo
+    API -- Upload / Download --> MinIO
+    
+    WSHub -- Publish / Subscribe --> Redis
+    Redis -- Sync Messages --> WSHub
+    WSHub -- Store Messages --> Mongo
 ```
 
 ---
