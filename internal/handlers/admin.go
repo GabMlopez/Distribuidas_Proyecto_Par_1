@@ -3,9 +3,11 @@ package handlers
 import (
 	"chat_distribuido/internal/repository"
 	"chat_distribuido/internal/models"
+	"chat_distribuido/internal/utils"
 	"crypto/rand"
 	"encoding/hex"
 	"html"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -53,10 +55,17 @@ func CreateSalasHandler(c *gin.Context) {
 		nombreSeguro = html.EscapeString(nombreSeguro)
 	}
 
+	// Hashear el PIN antes de guardar (Requerimiento de seguridad PDF)
+	hashedPin, err := utils.Hash_contrasenia(req.Pin)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error procesando el PIN de seguridad"})
+		return
+	}
+
 	// Crear sala
 	sala := models.Sala{
 		SalaID:      salaID,
-		Pin:         req.Pin,
+		Pin:         hashedPin,
 		Tipo:        req.Tipo,
 		MaxFileSize: maxFileSize,
 		Nombre:      nombreSeguro,
@@ -64,7 +73,7 @@ func CreateSalasHandler(c *gin.Context) {
 
 	// Guardar en MongoDB
 	collection := repository.GetCollection("salas")
-	_, err := collection.InsertOne(c.Request.Context(), sala)
+	_, err = collection.InsertOne(c.Request.Context(), sala)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creando la sala"})
 		return
@@ -121,7 +130,12 @@ func UpdateSalaHandler(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "El PIN debe tener entre 4 y 6 dígitos"})
 			return
 		}
-		update["pin"] = *req.Pin
+		hashedPin, err := utils.Hash_contrasenia(*req.Pin)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error procesando el nuevo PIN"})
+			return
+		}
+		update["pin"] = hashedPin
 	}
 	if req.Tipo != nil {
 		if *req.Tipo != "texto" && *req.Tipo != "multimedia" {
@@ -214,7 +228,9 @@ func DeleteSalaHandler(c *gin.Context) {
 
 	// Eliminar también todos los usuarios de la sala en la BD
 	usuariosCollection := repository.GetCollection("usuarios")
-	usuariosCollection.DeleteMany(c.Request.Context(), bson.M{"sala_id": roomID})
+	if _, err := usuariosCollection.DeleteMany(c.Request.Context(), bson.M{"sala_id": roomID}); err != nil {
+		log.Printf("Error eliminando usuarios de sala %s: %v", roomID, err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Sala eliminada exitosamente",

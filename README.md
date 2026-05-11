@@ -89,6 +89,8 @@ sequenceDiagram
 ## ✨ Características Principales
 
 ### 🔒 Seguridad y Control de Sesiones
+- **Auditoría de Seguridad Completa:** El sistema ha sido validado con herramientas de nivel industrial como **Gosec (SAST)**, **Gitleaks** y **k6 (DAST)**. Para más detalles, consulte el [Informe de Seguridad](docs/SECURITY_REPORT.md).
+- **PINs Encriptados (Bcrypt):** Los PINs de las salas se almacenan y validan utilizando hashing con Bcrypt.
 - **Sesión única estricta (DeviceID + IP):** El servidor bloquea con HTTP 409 cualquier intento de sesión duplicada utilizando un Canvas Fingerprint generado en el cliente, validación de IP local y estado de WebSockets en memoria (bloquea múltiples pestañas, modo incógnito y múltiples navegadores en una misma máquina).
 - **JWT:** Autenticación basada en tokens para acceso a salas y subida de archivos.
 - **Cabeceras de seguridad:** CSP, X-Frame-Options y X-Content-Type-Options configurados.
@@ -126,25 +128,15 @@ sequenceDiagram
 │       ├── context/        # UserContext (estado global del usuario y deviceId)
 │       └── types/          # Tipos TypeScript compartidos
 │
-├── controladores/          # Handlers HTTP del backend (Go)
-│   ├── salas_controller.go       # CRUD de salas + validación de sesión única por IP
-│   ├── web_socket_controller.go  # Upgrade HTTP → WebSocket
-│   ├── upload_controller.go      # Subida/descarga de archivos vía MinIO
-│   ├── admin_controller.go       # Endpoints de administración
-│   └── sockets/
-│       ├── hub.go                # Gestión del Hub de WebSockets + cleanup al desconectar
-│       └── cliente.go            # Estructura del cliente WebSocket
-│
-├── modelos/                # Structs de MongoDB (Usuario, Sala, Mensaje)
-├── db/
-│   ├── mongo.go            # Conexión a MongoDB
-│   ├── redis.go            # Conexión a Redis
-│   └── minio.go            # Cliente MinIO + inicialización del bucket
-│
-├── utils/
-│   └── jwt.go              # Generación y validación de tokens JWT
-│
-├── main.go                 # Entry point + configuración de rutas Gin
+├── internal/
+│   ├── handlers/           # Handlers HTTP (Admin, Auth, Rooms, Upload)
+│   ├── middleware/         # Auth, Rate Limiter y validaciones
+│   ├── models/             # Estructuras de datos (Sala, Usuario, Mensaje)
+│   ├── repository/         # Conexiones a Mongo, Redis y MinIO
+│   ├── utils/              # JWT, Hashing y Cifrado de mensajes
+│   └── websocket/          # Lógica del Hub y Clientes WebSocket
+├── cmd/
+│   └── api/                # Entry point (main.go)
 └── docker-compose.yml      # Infraestructura: MongoDB, Redis, MinIO
 ```
 

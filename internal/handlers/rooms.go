@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,7 +59,8 @@ func validarSalaYPin(ctx *gin.Context, salaID, pin string) (*models.Sala, error)
 		return nil, err
 	}
 
-	if sala.Pin != pin {
+	// Verificar PIN hasheado (Requerimiento PDF)
+	if err := utils.Check_contrasenia(pin, sala.Pin); err != nil {
 		return nil, mongo.ErrNoDocuments
 	}
 
@@ -563,7 +565,9 @@ func ListaSalas(c *gin.Context) {
 
 func generateUserID() string {
 	bytes := make([]byte, 8)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Printf("Error generating random bytes for UserID: %v", err)
+	}
 	return hex.EncodeToString(bytes)
 }
 

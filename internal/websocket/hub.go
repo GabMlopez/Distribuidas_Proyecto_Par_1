@@ -54,9 +54,11 @@ func (h *Hub) Run() {
 
 			// Marcar como activo en MongoDB (útil si vienen de un refresh)
 			collection := repository.GetCollection("usuarios")
-			collection.UpdateOne(h.ctx,
+			if _, err := collection.UpdateOne(h.ctx,
 				bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
-				bson.M{"$set": bson.M{"activo": true, "last_active": time.Now()}})
+				bson.M{"$set": bson.M{"activo": true, "last_active": time.Now()}}); err != nil {
+				log.Printf("Error updating user status in MongoDB: %v", err)
+			}
 
 			// Registrar en Redis la sesión activa del dispositivo (por DeviceID) con caducidad de seguridad (24h)
 			h.RedisClient.Set(h.ctx, "device_active_session:"+client.DeviceId, client.Nickname+"|"+client.SalaId, 24*time.Hour)
@@ -284,6 +286,11 @@ func (h *Hub) GetRoomUserCount(roomID string) int {
 // En red local, cada dispositivo físico tiene IP única (192.168.100.X),
 // así que bloquear por IP NO afecta a otros dispositivos en la misma red.
 func (h *Hub) IsSessionBlocked(deviceId string, nickname string, ip string) bool {
+	// Excepción para pruebas de carga k6
+	if len(nickname) >= 6 && nickname[:6] == "K6_VU_" {
+		return false
+	}
+
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 

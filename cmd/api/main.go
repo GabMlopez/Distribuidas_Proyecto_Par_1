@@ -65,12 +65,20 @@ func main() {
 
 	// Configurar router
 	r := gin.Default()
-	r.SetTrustedProxies(nil) // Fix: No confiar en todos los proxies por defecto (Seguridad)
+	if os.Getenv("ENV") == "test" {
+		// En modo de pruebas, confiamos en la IP local para permitir a k6 falsear IPs usando X-Forwarded-For
+		r.SetTrustedProxies([]string{"127.0.0.1", "::1", "10.0.0.0/8", "192.168.0.0/16"})
+	} else {
+		r.SetTrustedProxies(nil) // Fix: No confiar en proxies en producción (Seguridad)
+	}
+
+	// Middleware de Rate Limiting para proteger contra DDoS y fuerza bruta
+	r.Use(middleware.RateLimiterMiddleware())
 
 	// Middleware para bloquear localhost (IP y Origin) excepto /health
 	r.Use(func(c *gin.Context) {
 		// Permitir healthchecks de Render/Docker internamente
-		if c.Request.URL.Path == "/health" {
+		if c.Request.URL.Path == "/health" || os.Getenv("ENV") == "test" {
 			c.Next()
 			return
 		}

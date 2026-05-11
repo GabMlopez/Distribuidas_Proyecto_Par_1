@@ -27,13 +27,19 @@ type Cliente struct {
 func (c *Cliente) ReadPump() {
 	defer func() {
 		c.Hub.Desregistro <- c
-		c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			log.Printf("Error closing websocket connection: %v", err)
+		}
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
-	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		log.Printf("Error setting read deadline: %v", err)
+	}
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err := c.Conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			log.Printf("Error setting read deadline in pong handler: %v", err)
+		}
 		return nil
 	})
 
@@ -63,25 +69,31 @@ func (c *Cliente) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			log.Printf("Error closing websocket connection in write pump: %v", err)
+		}
 	}()
-
 	for {
 		select {
 		case message, ok := <-c.Envio:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				log.Printf("Error setting write deadline: %v", err)
+			}
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := c.Conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					log.Printf("Error sending close message: %v", err)
+				}
 				return
 			}
 
-			err := c.Conn.WriteJSON(message)
-			if err != nil {
+			if err := c.Conn.WriteJSON(message); err != nil {
 				return
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				log.Printf("Error setting write deadline for ping: %v", err)
+			}
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
