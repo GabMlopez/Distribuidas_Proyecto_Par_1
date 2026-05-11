@@ -142,6 +142,17 @@ sequenceDiagram
 
 ---
 
+## 🛡️ Seguridad y Pruebas (QA)
+
+El sistema ha sido sometido a rigurosas pruebas de seguridad y rendimiento para garantizar la integridad de las comunicaciones y el cumplimiento de los requisitos técnicos.
+
+- **[Plan Maestro de Pruebas](./docs/tests/PLAN_MAESTRO_PRUEBAS.md):** Estrategia integral, Matriz de Riesgos y Matriz de Amenazas/Soluciones.
+- **[Matriz Detallada de Casos de Prueba](./docs/tests/MATRIZ_DETALLADA_CASOS.md):** Desglose de casos unitarios, de integración, carga y seguridad dinámica.
+- **[Informe de Auditoría de Seguridad](./docs/SECURITY_REPORT.md):** Resumen de hallazgos corregidos (Gosec, Gitleaks, k6).
+- **[Resultados k6 (DDoS & Stress)](./tests/k6/TEST_RESULTS.md):** Evidencias gráficas y métricas de rendimiento bajo ataque.
+
+---
+
 ## 🚀 Instalación y Ejecución
 
 ### Prerrequisitos
