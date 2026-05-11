@@ -14,7 +14,7 @@ const API = process.env.NEXT_PUBLIC_API_URL;
 
 export default function HomePage() {
   const router = useRouter();
-  const { userContext, logout, setUserId, login } = useUser();
+  const { userContext, logout, setUserId, login,updateToken } = useUser();
   const isAdmin = userContext.isAdmin;
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -60,9 +60,9 @@ export default function HomePage() {
       if (res.ok) {
         const data = await res.json();
         if (isAdmin) {
-          setRooms(data?.salas || []);
+          setRooms(data.salas || []);
         } else {
-          setRooms(Array.isArray(data) ? data : (data?.salas || []));
+          setRooms(Array.isArray(data) ? data : (data.salas || []));
         }
       }
     } catch (e) {
@@ -205,38 +205,42 @@ export default function HomePage() {
   };
 
   const joinRoom = async () => {
-    if (!selectedRoom) return;
-    setJoinError('');
-    setJoining(true);
-    try {
-      const res = await fetch(`${API}/rooms/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sala_id: selectedRoom.sala_id,
-          pin: joinPin,
-          nickname: userContext.nickname,
-          device_id: userContext.deviceId
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const backendUserId = data.usuario_id;
-        sessionStorage.setItem('room_token', data.token);
-        sessionStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
-        sessionStorage.setItem('room_type', selectedRoom.tipo);
-        sessionStorage.setItem('user_id', backendUserId);
-        setUserId(backendUserId);
-        router.push(`/room/${selectedRoom.sala_id}`);
-      } else {
-        setJoinError(data.error || 'PIN incorrecto');
-      }
-    } catch {
-      setJoinError('Error de conexión');
+  if (!selectedRoom) return;
+  setJoinError('');
+  setJoining(true);
+  try {
+    const res = await fetch(`${API}/rooms/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sala_id: selectedRoom.sala_id,
+        pin: joinPin,
+        nickname: userContext.nickname,
+        device_id: userContext.deviceId
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const backendUserId = data.usuario_id;
+      sessionStorage.setItem('room_token', data.token);
+      sessionStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
+      sessionStorage.setItem('room_type', selectedRoom.tipo);
+      sessionStorage.setItem('user_id', backendUserId);
+      
+      // Actualizar el UserContext con el token
+      login(userContext.token, userContext.nickname, backendUserId, userContext.isAdmin);
+      updateToken(data.token); 
+      
+      setUserId(backendUserId);
+      router.push(`/room/${selectedRoom.sala_id}`);
+    } else {
+      setJoinError(data.error || 'PIN incorrecto');
     }
-    setJoining(false);
-  };
-
+  } catch {
+    setJoinError('Error de conexión');
+  }
+  setJoining(false);
+};
   const openEditModal = (room: Room) => {
     setEditRoomRef(room);
     setEditNombre(room.nombre || '');

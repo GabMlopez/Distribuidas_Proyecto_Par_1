@@ -25,6 +25,7 @@ func main() {
 	db.ConnectDB()
 	db.ConnectRedis()
 	db.ConnectMinio()
+	db.CrearIndicesMensajes()
 	defer db.DisconnectDB()
 
 	// Limpiar usuarios fantasma de sesiones anteriores (útil en desarrollo)
@@ -64,28 +65,51 @@ func main() {
 
 	// Configurar CORS
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-		c.Next()
-	})
+		origin := c.Request.Header.Get("Origin")
 
-	// Configurar Security Headers (CSP, X-Frame-Options, X-Content-Type-Options)
-	r.Use(func(c *gin.Context) {
-		// Permitir específicamente tu frontend en Vercel
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "https://distribuidas-proyecto-par-1.vercel.app/")
+		// Permitir orígenes específicos
+		allowedOrigins := []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:8080",
+		}
+
+		// Verificar si el origen está permitido
+		isAllowed := false
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				isAllowed = true
+				break
+			}
+		}
+
+		// Para desarrollo, permitir cualquier localhost
+		if !isAllowed && (len(origin) == 0 || origin == "null") {
+			isAllowed = true
+		}
+
+		if isAllowed {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Origin, X-Requested-With, Accept, Connection, Upgrade")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
+
+		// Cabeceras específicas para WebSocket
+		if c.Request.Header.Get("Upgrade") == "websocket" {
+			c.Writer.Header().Set("Connection", "Upgrade")
+			c.Writer.Header().Set("Upgrade", "websocket")
+		}
+
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
 		}
+
 		c.Next()
 	})
 
@@ -123,6 +147,7 @@ func main() {
 		roomRoutes.GET("/list", controladores.ListaSalas)
 		roomRoutes.POST("/join", controladores.UnirseSalaHandler)
 		roomRoutes.POST("/leave", controladores.DejarSalaHandler)
+		roomRoutes.GET("/:roomId/messages", controladores.GetHistorialMensajes)
 	}
 
 	// WebSocket
