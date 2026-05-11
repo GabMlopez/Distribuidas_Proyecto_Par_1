@@ -19,11 +19,16 @@ const (
 )
 
 func UploadFileHandler(c *gin.Context) {
-	// Obtener sala_id del contexto o query
+	// Obtener sala_id y nickname
 	salaID := c.PostForm("sala_id")
 	if salaID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "sala_id es requerido"})
 		return
+	}
+
+	nickname := c.PostForm("nickname")
+	if nickname == "" {
+		nickname = "Desconocido"
 	}
 
 	file, header, err := c.Request.FormFile("file")
@@ -115,7 +120,7 @@ func UploadFileHandler(c *gin.Context) {
 	if hub != nil {
 		hub.Broadcast <- sockets.Mensaje{
 			Tipo:      "multimedia",
-			Nickname:  "Sistema",
+			Nickname:  nickname,
 			Texto:     fmt.Sprintf("Nuevo archivo compartido: %s", header.Filename),
 			SalaID:    salaID,
 			FileURL:   fileURL,
@@ -132,7 +137,7 @@ func UploadFileHandler(c *gin.Context) {
 
 func GetFileHandler(c *gin.Context) {
 	filename := c.Param("filename")
-	
+
 	// Mitigar Path Traversal: obtener solo el nombre base
 	safeFilename := filepath.Base(filename)
 
