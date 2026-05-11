@@ -61,6 +61,44 @@ graph TD
     WSHub -- Store Messages --> Mongo
 ```
 
+### Diagrama de Secuencias (Chat y Multimedia)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Usuario (Browser)
+    participant Next as Frontend (Next.js)
+    participant API as Backend API (Gin)
+    participant MinIO as Almacenamiento (MinIO)
+    participant WS as WebSocket Hub
+    participant Mongo as BDD (MongoDB)
+    participant Redis as Pub/Sub (Redis)
+
+    %% Envío de texto
+    Note right of User: Envío de Mensaje de Texto
+    User->>Next: Escribe y envía texto
+    Next->>WS: Envía JSON {tipo: "chat", texto: "..."}
+    WS->>Mongo: Guarda mensaje (InsertOne)
+    WS->>Redis: Publica mensaje a canal "chat_messages"
+    Redis-->>WS: Distribuye a otras instancias
+    WS->>Next: Broadcast a clientes de la sala
+    Next->>User: Muestra el mensaje en UI
+
+    %% Envío de archivo
+    Note right of User: Subida de Archivo Multimedia
+    User->>Next: Selecciona archivo
+    Next->>API: POST /upload/file (file, sala_id, nickname)
+    API->>MinIO: PutObject (Sube archivo)
+    MinIO-->>API: Retorna OK (Archivo guardado)
+    API->>WS: Emite evento interno {tipo: "multimedia", ...}
+    API-->>Next: 200 OK (Upload exitoso)
+    
+    WS->>Mongo: Guarda evento en historial (InsertOne)
+    WS->>Redis: Publica mensaje a canal "chat_messages"
+    Redis-->>WS: Distribuye a otras instancias
+    WS->>Next: Broadcast a clientes de la sala
+    Next->>User: Muestra visualización del archivo en UI
+```
+
 ---
 
 ## ✨ Características Principales
