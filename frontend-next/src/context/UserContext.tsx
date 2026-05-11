@@ -15,7 +15,7 @@ interface UserContextType {
   login: (token: string | null, nickname: string, userId: string, isAdmin: boolean) => void;
   logout: () => void;
   setUserId: (userId: string) => void;
-  updateToken: (token: string) => void; // Nuevo método
+  updateToken: (token: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);

@@ -24,7 +24,7 @@ export default function HomePage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // Nuevo estado
+  const [showDeleteModal, setShowDeleteModal] = useState(false); 
 
   // Estados Crear Sala
   const [salanombre, setSalanombre] = useState('');
@@ -204,8 +204,6 @@ export default function HomePage() {
     }
   };
 
-  // En HomePage.tsx, modificar la función joinRoom:
-
 const joinRoom = async () => {
   if (!selectedRoom) return;
   setJoinError('');
@@ -231,9 +229,7 @@ const joinRoom = async () => {
       sessionStorage.setItem('room_type', selectedRoom.tipo);
       sessionStorage.setItem('room_user_id', backendUserId);
       
-      // NO actualizar el token del admin si lo es
       if (!userContext.isAdmin) {
-        // Solo si es usuario normal, actualizamos el token en el contexto
         login(userContext.token, userContext.nickname, backendUserId, userContext.isAdmin);
         updateToken(data.token);
         setUserId(backendUserId);

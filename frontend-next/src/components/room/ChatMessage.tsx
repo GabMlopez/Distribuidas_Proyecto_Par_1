@@ -1,4 +1,3 @@
-// components/room/ChatMessage.tsx
 'use client';
 
 import { useState } from 'react';

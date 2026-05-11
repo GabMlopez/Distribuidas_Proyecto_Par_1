@@ -6,7 +6,7 @@ import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, userContext } = useUser(); // Añadir userContext
+  const { login, userContext } = useUser(); 
   
   const [mode, setMode] = useState<'user' | 'admin'>('user');
   const [username, setUsername] = useState('');
@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [deviceId, setDeviceId] = useState(''); // Estado para deviceId
+  const [deviceId, setDeviceId] = useState(''); 
   
   const API = process.env.NEXT_PUBLIC_API_URL;
 
@@ -58,9 +58,9 @@ export default function LoginPage() {
         }
         
         // Usar deviceId como userId para consistencia
-        const userId = deviceId; // ¡Esto es clave!
+        const userId = deviceId; 
         
-        // Guardar en sessionStorage adicionalmente
+        // Guardar en sessionStorage
         sessionStorage.setItem('chat_nickname', nickname.trim());
         sessionStorage.setItem('chat_user_id', userId);
         sessionStorage.setItem('chat_is_admin', 'false');

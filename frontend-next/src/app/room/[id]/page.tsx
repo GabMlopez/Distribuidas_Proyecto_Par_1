@@ -14,7 +14,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const unwrappedParams = use(params);
   const roomId = unwrappedParams.id;
   const router = useRouter();
-  const { userContext } = useUser(); // ❌ Eliminamos updateToken de aquí
+  const { userContext } = useUser();
 
   const [roomName, setRoomName] = useState(roomId);
   const [roomType, setRoomType] = useState('texto');
@@ -33,17 +33,14 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const chatBodyRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Función para cargar historial de mensajes
   const loadHistoricalMessages = useCallback(async (tokenToUse?: string) => {
     const finalRoomToken = tokenToUse || sessionStorage.getItem('room_token');
     if (!finalRoomToken) {
-      console.log('No hay token de sala, no se puede cargar historial');
       setLoadingHistory(false);
       return;
     }
     
     try {
-      console.log('Cargando historial de mensajes...');
       const response = await fetch(`${API}/rooms/${roomId}/messages?limit=50`, {
         headers: {
           'Authorization': `Bearer ${finalRoomToken}`,
@@ -54,7 +51,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       if (response.ok) {
         const data = await response.json();
         if (data.messages && data.messages.length > 0) {
-          console.log(`Cargados ${data.messages.length} mensajes históricos`);
           setMessages(data.messages);
         } else {
           console.log('No hay mensajes históricos');
@@ -76,19 +72,16 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     const savedRoomName = sessionStorage.getItem('room_name');
     const savedRoomType = sessionStorage.getItem('room_type');
 
-    console.log('Restaurando datos de sala:', { savedRoomToken, savedRoomName, savedRoomType });
-
-    // Solo restaurar el token de sala, NUNCA actualizar el token del contexto
+    // Solo restaurar el token de sala
     if (savedRoomToken && !roomToken) {
       setRoomToken(savedRoomToken);
-      // ✅ NO llamamos a updateToken aquí para no sobrescribir el token del admin
     }
 
     if (savedRoomName) setRoomName(savedRoomName);
     if (savedRoomType) setRoomType(savedRoomType);
     
     setIsReady(true);
-  }, []); // ✅ Eliminamos roomToken y userContext.token de las dependencias
+  }, []); 
 
   // SEGUNDO useEffect: Conectar WebSocket y cargar historial
   useEffect(() => {
@@ -100,7 +93,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       return;
     }
 
-    // Obtener token de sala (separado del token de admin)
     let finalRoomToken = sessionStorage.getItem('room_token');
     if (!finalRoomToken) {
       console.error('No hay token de sala');
@@ -131,7 +123,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     const websocket = new WebSocket(url);
     
     websocket.onopen = () => {
-      console.log('✅ WebSocket conectado exitosamente');
+      console.log(' WebSocket conectado exitosamente');
       setWsStatus('open');
       loadHistoricalMessages(finalRoomToken);
     };
@@ -233,7 +225,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
       timestamp: Math.floor(Date.now() / 1000)
     };
     
-    console.log('Enviando mensaje:', message);
     ws.send(JSON.stringify(message));
     setCurrentMessage('');
   };
