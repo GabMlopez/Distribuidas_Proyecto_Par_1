@@ -67,8 +67,14 @@ func main() {
 	r := gin.Default()
 	r.SetTrustedProxies(nil) // Fix: No confiar en todos los proxies por defecto (Seguridad)
 
-	// Middleware para bloquear localhost (IP y Origin)
+	// Middleware para bloquear localhost (IP y Origin) excepto /health
 	r.Use(func(c *gin.Context) {
+		// Permitir healthchecks de Render/Docker internamente
+		if c.Request.URL.Path == "/health" {
+			c.Next()
+			return
+		}
+
 		ip := c.ClientIP()
 		origin := c.Request.Header.Get("Origin")
 

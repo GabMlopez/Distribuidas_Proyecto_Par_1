@@ -6,7 +6,83 @@ Sistema de mensajería distribuida con soporte para salas de texto y multimedia,
 
 ## 🏗️ Arquitectura
 
+### Vista General (Contenedores)
 ![Arquitectura del Chat Distribuido](docs/arquitectura.png)
+
+### Diagrama de Flujo del Sistema
+```mermaid
+graph TD
+    %% Clients
+    User[Web Client / Browser]
+
+    %% Frontend
+    subgraph Frontend [Frontend - Vercel / Next.js]
+        NextApp[Next.js App UI]
+    end
+
+    %% Backend
+    subgraph Backend [Backend - Render / Go]
+        API[Go API - Gin Framework]
+        WSHub[WebSocket Hub]
+    end
+
+    %% Storage & Databases
+    subgraph Databases [Data & Storage]
+        Mongo[(MongoDB)]
+        Redis[(Redis Pub/Sub)]
+        MinIO[(MinIO Object Storage)]
+    end
+
+    %% Connections
+    User -- HTTP / REST --> NextApp
+    NextApp -- REST API --> API
+    NextApp -- WebSocket --> WSHub
+
+    API -- CRUD Operations --> Mongo
+    API -- Upload / Download --> MinIO
+    
+    WSHub -- Publish / Subscribe --> Redis
+    Redis -- Sync Messages --> WSHub
+    WSHub -- Store Messages --> Mongo
+```
+
+### Diagrama de Secuencias (Chat y Multimedia)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Usuario (Browser)
+    participant Next as Frontend (Next.js)
+    participant API as Backend API (Gin)
+    participant MinIO as Almacenamiento (MinIO)
+    participant WS as WebSocket Hub
+    participant Mongo as BDD (MongoDB)
+    participant Redis as Pub/Sub (Redis)
+
+    %% Envío de texto
+    Note right of User: Envío de Mensaje de Texto
+    User->>Next: Escribe y envía texto
+    Next->>WS: Envía JSON {tipo: "chat", texto: "..."}
+    WS->>Mongo: Guarda mensaje (InsertOne)
+    WS->>Redis: Publica mensaje a canal "chat_messages"
+    Redis-->>WS: Distribuye a otras instancias
+    WS->>Next: Broadcast a clientes de la sala
+    Next->>User: Muestra el mensaje en UI
+
+    %% Envío de archivo
+    Note right of User: Subida de Archivo Multimedia
+    User->>Next: Selecciona archivo
+    Next->>API: POST /upload/file (file, sala_id, nickname)
+    API->>MinIO: PutObject (Sube archivo)
+    MinIO-->>API: Retorna OK (Archivo guardado)
+    API->>WS: Emite evento interno {tipo: "multimedia", ...}
+    API-->>Next: 200 OK (Upload exitoso)
+    
+    WS->>Mongo: Guarda evento en historial (InsertOne)
+    WS->>Redis: Publica mensaje a canal "chat_messages"
+    Redis-->>WS: Distribuye a otras instancias
+    WS->>Next: Broadcast a clientes de la sala
+    Next->>User: Muestra visualización del archivo en UI
+```
 
 ---
 
@@ -138,12 +214,15 @@ La interfaz queda disponible en `http://localhost:3000`.
 
 ## 🛡️ Lógica de Sesión Única y Restricción de Dispositivo
 
-El sistema implementa una arquitectura de 3 capas para garantizar de forma estricta que un dispositivo físico tenga **una sola sesión activa** a la vez, resolviendo problemas comunes como el uso del modo incógnito o múltiples navegadores.
+El sistema implementa una arquitectura de 3 capas para garantizar de forma estricta que un dispositivo físico (o un usuario) tenga **una sola sesión activa a la vez**, resolviendo problemas comunes como el uso de modo incógnito o múltiples navegadores simultáneos.
 
-1. **Frontend (Canvas Fingerprinting):** En lugar de usar `localStorage` o APIs bloqueadas en modo incógnito (como WebGL unmasked info), se utiliza Canvas Fingerprinting combinado con propiedades estáticas del hardware (CPU, RAM, Resolución) para generar un **DeviceID determinista** (`hw_XXXXX`) que es idéntico en pestañas normales y de incógnito de un mismo navegador.
-2. **Capa 0 (Hub en Memoria):** Al intentar unirse a una sala o establecer el WebSocket, el servidor verifica instantáneamente si en la memoria RAM (Hub) ya existe una conexión viva para ese **DeviceID** o para esa **Dirección IP**. Esto bloquea de inmediato: pestañas duplicadas, modo incógnito (por el DeviceID coincidente) y otros navegadores en la misma máquina (por la IP local).
-3. **Capa 1 y 2 (Redis y MongoDB):** Si no hay un WebSocket vivo en memoria (ej. reconexión rápida), se valida en Redis y en el índice único de MongoDB (`unique_active_device_id`). Si el dispositivo tiene una sesión marcada como activa, se responde con **HTTP 409 Conflict**.
-4. **Desconexión Limpia:** Al cerrar la ventana o salir de la sala, el servidor libera el DeviceID purificando Redis, el Hub en memoria y marcando `activo: false` en MongoDB, lo que permite al dispositivo reconectarse en el futuro sin bloqueos.
+1. **Frontend (Canvas Fingerprinting):** En lugar de usar `localStorage` o APIs bloqueadas en modo incógnito, se utiliza Canvas Fingerprinting combinado con propiedades estáticas del hardware (CPU, RAM, Resolución) para generar un **DeviceID determinista** (`hw_XXXXX`) que identifica al navegador.
+2. **Capa 0 (Triple validación en Hub):** Al intentar unirse a una sala o establecer el WebSocket, el servidor verifica instantáneamente en la memoria RAM si ya existe una conexión viva basándose en 3 factores: el **DeviceID**, la **Dirección IP** o el **Nickname**. Esto bloquea de inmediato:
+   * Pestañas duplicadas (vía DeviceID).
+   * Intentos de robar un nombre de usuario activo (vía Nickname).
+   * Modo incógnito u otros navegadores abiertos en la misma máquina física (vía la IP local única del dispositivo).
+3. **Capa 1 y 2 (Redis y MongoDB):** Si no hay un WebSocket vivo en memoria (ej. reconexión rápida), se valida el estado en Redis y en el índice único de MongoDB (`unique_active_device_id`). Si el dispositivo ya está marcado como activo, el servidor responde con **HTTP 409 Conflict**.
+4. **Desconexión Limpia:** Al cerrar la ventana o salir de la sala, el servidor libera el dispositivo purificando Redis, el Hub en memoria y marcando `activo: false` en MongoDB, permitiendo reconectarse en el futuro sin bloqueos fantasma.
 
 ---
 
