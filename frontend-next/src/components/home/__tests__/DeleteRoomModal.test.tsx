@@ -20,14 +20,14 @@ describe('DeleteModal Component', () => {
 
   it('renders correctly when show is true', () => {
     render(<DeleteModal {...defaultProps} />)
-    expect(screen.getByText('Eliminar sala')).toBeInTheDocument()
+    expect(screen.getAllByText('Eliminar sala')[0]).toBeInTheDocument()
     expect(screen.getByText('Sala de Prueba')).toBeInTheDocument()
     expect(screen.getByText('ID: room-1')).toBeInTheDocument()
   })
 
   it('does not render when show is false', () => {
     render(<DeleteModal {...defaultProps} show={false} />)
-    expect(screen.queryByText('Eliminar sala')).not.toBeInTheDocument()
+    expect(screen.queryAllByText('Eliminar sala').length).toBe(0)
   })
 
   it('calls onClose when cancel is clicked', () => {
