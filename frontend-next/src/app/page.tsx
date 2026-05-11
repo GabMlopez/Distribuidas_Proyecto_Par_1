@@ -1,12 +1,12 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, userContext } = useUser(); // Añadir userContext
+  const { login } = useUser();
   
   const [mode, setMode] = useState<'user' | 'admin'>('user');
   const [username, setUsername] = useState('');
@@ -14,15 +14,8 @@ export default function LoginPage() {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [deviceId, setDeviceId] = useState(''); // Estado para deviceId
   
-  const API = process.env.NEXT_PUBLIC_API_URL;
-
-  useEffect(() => {
-    if (userContext.deviceId) {
-      setDeviceId(userContext.deviceId);
-    }
-  }, [userContext.deviceId]);
+  const API = process.env.NEXT_PUBLIC_API_URL ;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +31,8 @@ export default function LoginPage() {
         });
         const data = await res.json();
         if (res.ok) {
-          login(data.token, 'Admin', data.usuario_id, true);
+          login(data.token, 'Admin', data.usuario_id,true);
+          console.log("admin here")
           router.push('/home');
         } else {
           setError(data.error || 'Credenciales incorrectas');
@@ -50,27 +44,14 @@ export default function LoginPage() {
       if (!nickname.trim()) {
         setError('El nickname es requerido');
       } else {
-        // Esperar a tener el deviceId
-        if (!deviceId) {
-          setError('Inicializando dispositivo, intenta de nuevo...');
-          setLoading(false);
-          return;
-        }
-        
-        // Usar deviceId como userId para consistencia
-        const userId = deviceId; // ¡Esto es clave!
-        
-        // Guardar en sessionStorage adicionalmente
-        sessionStorage.setItem('chat_nickname', nickname.trim());
-        sessionStorage.setItem('chat_user_id', userId);
-        sessionStorage.setItem('chat_is_admin', 'false');
-        
-        login(null, nickname.trim(), userId, false);
+        login(null, nickname.trim(), 'user_' + Math.random().toString(36).substring(2, 11),false);
+        console.log("admin here not")
         router.push('/home');
       }
     }
     setLoading(false);
   };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
       {/* Orbs */}

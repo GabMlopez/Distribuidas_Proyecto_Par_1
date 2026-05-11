@@ -15,17 +15,9 @@ interface UserContextType {
   login: (token: string | null, nickname: string, userId: string, isAdmin: boolean) => void;
   logout: () => void;
   setUserId: (userId: string) => void;
-  updateToken: (token: string) => void; // Nuevo método
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-
-const STORAGE_KEYS = {
-  NICKNAME: 'chat_nickname',
-  USER_ID: 'chat_user_id',
-  IS_ADMIN: 'chat_is_admin',
-  TOKEN: 'chat_token'
-};
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userContext, setUserContext] = useState<UserContextState>({
@@ -35,32 +27,27 @@ export function UserProvider({ children }: { children: ReactNode }) {
     userId: '',
     isAdmin: false
   });
+
   useEffect(() => {
-    const loadPersistedData = () => {
-      const nickname = sessionStorage.getItem(STORAGE_KEYS.NICKNAME) || '';
-      const userId = sessionStorage.getItem(STORAGE_KEYS.USER_ID) || '';
-      const isAdmin = sessionStorage.getItem(STORAGE_KEYS.IS_ADMIN) === 'true';
-      const token = sessionStorage.getItem(STORAGE_KEYS.TOKEN) || null;
-      
-      if (nickname) {
-        setUserContext(prev => ({
-          ...prev,
-          nickname,
-          userId,
-          isAdmin,
-          token
-        }));
-      }
-    };
-    
-    loadPersistedData();
+    // Hidratación controlada post-render
+    setUserContext(prev => ({
+      ...prev,
+      token: sessionStorage.getItem('token'),
+      nickname: sessionStorage.getItem('nickname') || '',
+      deviceId: sessionStorage.getItem('deviceId') || '',
+      userId: sessionStorage.getItem('userId') || '',
+      isAdmin: sessionStorage.getItem('isAdmin') === 'true'
+    }));
   }, []);
 
   useEffect(() => {
     const fetchDeviceId = async () => {
       try {
+        // Generar una Huella de Hardware (Hard Fingerprint) estricta
+        // Esto NO depende del almacenamiento del navegador, por lo que será idéntico en Incógnito.
         let hardwareInfo = '';
         
+        // 1. Extraer el modelo exacto de la Tarjeta Gráfica (GPU) mediante WebGL
         try {
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
@@ -72,13 +59,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
             }
         } catch (e) {}
 
+        // 2. Extraer CPU, Memoria RAM y Sistema Operativo
         const cores = navigator.hardwareConcurrency || 'unk_c';
         const ram = (navigator as any).deviceMemory || 'unk_m';
         const platform = navigator.platform || 'unk_p';
+        
+        // 3. Extraer Resolución de Pantalla y Profundidad de Color
         const screen = `${window.screen.width}x${window.screen.height}_${window.screen.colorDepth}`;
 
+        // Unir toda la información del hardware físico
         hardwareInfo += `${cores}_${ram}_${platform}_${screen}`;
 
+        // Convertir la cadena de hardware en un Hash numérico simple (32-bit)
         let hash = 0;
         for (let i = 0; i < hardwareInfo.length; i++) {
             const char = hardwareInfo.charCodeAt(i);
@@ -90,13 +82,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         setUserContext(prev => ({
           ...prev,
-          deviceId: finalDeviceId
+          deviceId: finalDeviceId,
+          isAdmin: true
         }));
       } catch (error) {
         console.error("Error generando Hardware Fingerprint", error);
         setUserContext(prev => ({
           ...prev,
-          deviceId: 'dev_' + Math.random().toString(36).substring(2, 11)
+          deviceId: 'dev_' + Math.random().toString(36).substring(2, 11),
+          isAdmin: true  
         }));
       }
     };
@@ -104,28 +98,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (token: string | null, nickname: string, userId: string, isAdmin: boolean) => {
-    sessionStorage.setItem(STORAGE_KEYS.NICKNAME, nickname);
-    sessionStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-    sessionStorage.setItem(STORAGE_KEYS.IS_ADMIN, String(isAdmin));
-    if (token) {
-      sessionStorage.setItem(STORAGE_KEYS.TOKEN, token);
-    }
-    
-    setUserContext(prev => ({ 
-      ...prev, 
-      token, 
-      nickname, 
-      userId, 
-      isAdmin 
-    }));
+    setUserContext(prev => ({ ...prev, token, nickname: nickname , userId, isAdmin }));
   };
 
   const logout = () => {
-    sessionStorage.removeItem(STORAGE_KEYS.NICKNAME);
-    sessionStorage.removeItem(STORAGE_KEYS.USER_ID);
-    sessionStorage.removeItem(STORAGE_KEYS.IS_ADMIN);
-    sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
-    
     setUserContext(prev => ({
       ...prev,
       token: null,
@@ -133,20 +109,22 @@ export function UserProvider({ children }: { children: ReactNode }) {
       userId: '',
       isAdmin: false
     }));
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('nickname');
+    sessionStorage.removeItem('userId');
+    sessionStorage.removeItem('isAdmin');
+    sessionStorage.removeItem('room_name');
+    sessionStorage.removeItem('room_type');
+    sessionStorage.removeItem('room_token');
   };
 
   const setUserId = (userId: string) => {
-    sessionStorage.setItem(STORAGE_KEYS.USER_ID, userId);
     setUserContext(prev => ({ ...prev, userId }));
-  };
-  
-  const updateToken = (token: string) => {
-    sessionStorage.setItem(STORAGE_KEYS.TOKEN, token);
-    setUserContext(prev => ({ ...prev, token }));
+    sessionStorage.setItem('user_id', userId);  
   };
 
-  return (
-    <UserContext.Provider value={{ userContext, login, logout, setUserId, updateToken }}>
+   return (
+    <UserContext.Provider value={{ userContext, login, logout, setUserId }}>
       {children}
     </UserContext.Provider>
   );
