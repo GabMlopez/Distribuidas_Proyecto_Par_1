@@ -7,9 +7,11 @@ Sistema de mensajería distribuida con soporte para salas de texto y multimedia,
 ## 🏗️ Arquitectura
 
 ### Vista General (Contenedores)
+
 ![Arquitectura del Chat Distribuido](docs/arquitectura.png)
 
 ### Diagrama de Flujo del Sistema
+
 ```mermaid
 graph TD
     %% Clients
@@ -40,13 +42,14 @@ graph TD
 
     API -- CRUD Operations --> Mongo
     API -- Upload / Download --> MinIO
-    
+  
     WSHub -- Publish / Subscribe --> Redis
     Redis -- Sync Messages --> WSHub
     WSHub -- Store Messages --> Mongo
 ```
 
 ### Diagrama de Secuencias (Chat y Multimedia)
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -76,7 +79,7 @@ sequenceDiagram
     MinIO-->>API: Retorna OK (Archivo guardado)
     API->>WS: Emite evento interno {tipo: "multimedia", ...}
     API-->>Next: 200 OK (Upload exitoso)
-    
+  
     WS->>Mongo: Guarda evento en historial (InsertOne)
     WS->>Redis: Publica mensaje a canal "chat_messages"
     Redis-->>WS: Distribuye a otras instancias
@@ -89,6 +92,7 @@ sequenceDiagram
 ## ✨ Características Principales
 
 ### 🔒 Seguridad y Control de Sesiones
+
 - **Auditoría de Seguridad Completa:** El sistema ha sido validado con herramientas de nivel industrial como **Gosec (SAST)**, **Gitleaks** y **k6 (DAST)**. Para más detalles, consulte el [Informe de Seguridad](docs/SECURITY_REPORT.md).
 - **PINs Encriptados (Bcrypt):** Los PINs de las salas se almacenan y validan utilizando hashing con Bcrypt.
 - **Sesión única estricta (DeviceID + IP):** El servidor bloquea con HTTP 409 cualquier intento de sesión duplicada utilizando un Canvas Fingerprint generado en el cliente, validación de IP local y estado de WebSockets en memoria (bloquea múltiples pestañas, modo incógnito y múltiples navegadores en una misma máquina).
@@ -98,18 +102,21 @@ sequenceDiagram
 - **Path Traversal:** Mitigado en la gestión de archivos usando `filepath.Base()`.
 
 ### 💬 Mensajería en Tiempo Real
+
 - **WebSockets** para mensajes de texto e indicadores de escritura.
 - **Salas de texto y multimedia** con PIN de acceso opcional.
 - **Desconexión limpia:** Al cerrar la ventana/pestaña, el estado `activo` del usuario se libera automáticamente en la base de datos, permitiendo reconectarse desde el mismo dispositivo.
 - **Broadcast** a todos los miembros de la sala activos.
 
 ### 📁 Almacenamiento de Archivos (MinIO)
+
 - Subida segura de imágenes, documentos, audio, video y archivos comprimidos.
 - Máximo de 100 MB por archivo.
 - Los archivos se sirven directamente desde MinIO con `Content-Disposition` correcto.
 - Vista previa de imágenes en el chat.
 
 ### 🖥️ Frontend (Next.js)
+
 - Interfaz moderna con modo oscuro, glassmorphism y animaciones.
 - Diseño completamente responsivo.
 - Gestión de salas: crear, editar, eliminar y unirse con PIN.
@@ -149,13 +156,14 @@ El sistema ha sido sometido a rigurosas pruebas de seguridad y rendimiento para 
 - **[Plan Maestro de Pruebas](./docs/tests/PLAN_MAESTRO_PRUEBAS.md):** Estrategia integral, Matriz de Riesgos y Matriz de Amenazas/Soluciones.
 - **[Matriz Detallada de Casos de Prueba](./docs/tests/MATRIZ_DETALLADA_CASOS.md):** Desglose de casos unitarios, de integración, carga y seguridad dinámica.
 - **[Informe de Auditoría de Seguridad](./docs/SECURITY_REPORT.md):** Resumen de hallazgos corregidos (Gosec, Gitleaks, k6).
-- **[Resultados k6 (DDoS & Stress)](./tests/k6/TEST_RESULTS.md):** Evidencias gráficas y métricas de rendimiento bajo ataque.
+- **[Resultados k6 (DDoS &amp; Stress)](./tests/k6/TEST_RESULTS.md):** Evidencias gráficas y métricas de rendimiento bajo ataque.
 
 ---
 
 ## 🚀 Instalación y Ejecución
 
 ### Prerrequisitos
+
 - [Go 1.21+](https://go.dev/dl/)
 - [Node.js 20+](https://nodejs.org/)
 - [Docker](https://www.docker.com/) (corriendo en WSL si usas Windows)
@@ -168,12 +176,13 @@ docker compose up -d
 ```
 
 Esto levanta:
-| Servicio  | Puerto Host | Descripción            |
-|-----------|-------------|------------------------|
-| MongoDB   | `27018`     | Base de datos principal |
-| Redis     | `6380`      | Pub/Sub y caché        |
-| MinIO     | `9191`      | Almacenamiento S3      |
-| MinIO UI  | `9292`      | Consola web de MinIO   |
+
+| Servicio | Puerto Host | Descripción            |
+| -------- | ----------- | ----------------------- |
+| MongoDB  | `27018`   | Base de datos principal |
+| Redis    | `6380`    | Pub/Sub y caché        |
+| MinIO    | `9191`    | Almacenamiento S3       |
+| MinIO UI | `9292`    | Consola web de MinIO    |
 
 > **Credenciales MinIO por defecto:** user: `admin` / pass: `password123`
 
@@ -201,17 +210,17 @@ La interfaz queda disponible en `http://localhost:3000`.
 
 ## 🔌 API Endpoints Principales
 
-| Método | Ruta                  | Descripción                                   |
-|--------|-----------------------|-----------------------------------------------|
-| POST   | `/rooms/create`       | Crear sala (requiere token Admin)             |
-| GET    | `/rooms/list`         | Listar todas las salas                        |
-| POST   | `/rooms/join`         | Unirse a sala (valida PIN + sesión única IP)  |
-| PUT    | `/rooms/update`       | Actualizar sala (requiere token Admin)        |
-| DELETE | `/rooms/delete`       | Eliminar sala (requiere token Admin)          |
-| POST   | `/rooms/leave`        | Abandonar sala manualmente                    |
-| GET    | `/ws?room=ID&device_id=X` | Conexión WebSocket a sala             |
-| POST   | `/upload/file`        | Subir archivo multimedia                      |
-| GET    | `/upload/file/:name`  | Descargar/ver archivo desde MinIO             |
+| Método | Ruta                        | Descripción                                   |
+| ------- | --------------------------- | ---------------------------------------------- |
+| POST    | `/rooms/create`           | Crear sala (requiere token Admin)              |
+| GET     | `/rooms/list`             | Listar todas las salas                         |
+| POST    | `/rooms/join`             | Unirse a sala (valida PIN + sesión única IP) |
+| PUT     | `/rooms/update`           | Actualizar sala (requiere token Admin)         |
+| DELETE  | `/rooms/delete`           | Eliminar sala (requiere token Admin)           |
+| POST    | `/rooms/leave`            | Abandonar sala manualmente                     |
+| GET     | `/ws?room=ID&device_id=X` | Conexión WebSocket a sala                     |
+| POST    | `/upload/file`            | Subir archivo multimedia                       |
+| GET     | `/upload/file/:name`      | Descargar/ver archivo desde MinIO              |
 
 ---
 
@@ -232,8 +241,7 @@ El sistema implementa una arquitectura de 3 capas para garantizar de forma estri
 ## 🧑‍💻 Credenciales de Prueba
 
 | Usuario | Contraseña | Rol   |
-|---------|------------|-------|
-| Admin   | admin123   | Admin |
+| ------- | ----------- | ----- |
+| admin   | admin1234   | Admin |
 
 > Los usuarios regulares solo necesitan elegir un nickname al unirse a una sala.
-
