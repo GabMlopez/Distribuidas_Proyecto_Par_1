@@ -10,8 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"chat_distribuido/modelos"
+	"chat_distribuido/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/minio/minio-go/v7"
+	"go.mongodb.org/mongo-driver/bson"
+	"net/url"
 )
 
 const (
@@ -111,15 +115,34 @@ func UploadFileHandler(c *gin.Context) {
 
 	fileURL := fmt.Sprintf("/upload/file/%s", filename)
 
+	// Obtener el nickname del usuario
+	usuarioID, exists := c.Get("usuario")
+	nickname := "Sistema"
+	if exists {
+		var usuario modelos.Usuario
+		err := db.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": usuarioID.(string)}).Decode(&usuario)
+		if err == nil && usuario.Nickname != "" {
+			nickname = usuario.Nickname
+		}
+	}
+
+	metadata := map[string]interface{}{
+		"filename":     header.Filename,
+		"size":         fileSize,
+		"content_type": contentType,
+		"extension":    ext,
+	}
+
 	// Emitir evento por WebSocket si el hub está disponible
 	if hub != nil {
 		hub.Broadcast <- sockets.Mensaje{
 			Tipo:      "multimedia",
-			Nickname:  "Sistema",
+			Nickname:  nickname,
 			Texto:     fmt.Sprintf("Nuevo archivo compartido: %s", header.Filename),
 			SalaID:    salaID,
 			FileURL:   fileURL,
 			Timestamp: time.Now().Unix(),
+			Metadata:  metadata,
 		}
 	}
 
@@ -132,6 +155,9 @@ func UploadFileHandler(c *gin.Context) {
 
 func GetFileHandler(c *gin.Context) {
 	filename := c.Param("filename")
+	if decoded, err := url.PathUnescape(filename); err == nil {
+		filename = decoded
+	}
 	
 	// Mitigar Path Traversal: obtener solo el nombre base
 	safeFilename := filepath.Base(filename)
@@ -159,4 +185,75 @@ func GetFileHandler(c *gin.Context) {
 	c.DataFromReader(http.StatusOK, objInfo.Size, objInfo.ContentType, object, map[string]string{
 		"Content-Disposition": fmt.Sprintf("inline; filename=\"%s\"", safeFilename),
 	})
+}
+
+func DeleteFileHandler(c *gin.Context) {
+	filename := c.Param("filename")
+	if decoded, err := url.PathUnescape(filename); err == nil {
+		filename = decoded
+	}
+	safeFilename := filepath.Base(filename)
+
+	usuarioID, exists := c.Get("usuario")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	var usuario modelos.Usuario
+	err := db.GetCollection("usuarios").FindOne(c.Request.Context(), bson.M{"usuario_id": usuarioID.(string)}).Decode(&usuario)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Usuario no encontrado"})
+		return
+	}
+
+	fileURL := fmt.Sprintf("/upload/file/%s", safeFilename)
+
+	// Buscar el mensaje asociado
+	var mensaje modelos.Mensaje
+	err = db.GetCollection("mensajes").FindOne(c.Request.Context(), bson.M{"file_url": fileURL}).Decode(&mensaje)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Mensaje o archivo no encontrado"})
+		return
+	}
+
+	// Validar que el usuario sea el dueño
+	if mensaje.Nickname != usuario.Nickname {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No tienes permiso para eliminar esta imagen"})
+		return
+	}
+
+	// Eliminar de MinIO
+	if db.MinioClient != nil {
+		err = db.MinioClient.RemoveObject(c.Request.Context(), db.MinioBucket, safeFilename, minio.RemoveObjectOptions{})
+		if err != nil {
+			log.Printf("Error eliminando archivo de MinIO: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al eliminar el archivo físico"})
+			return
+		}
+	}
+
+	// Actualizar en MongoDB en lugar de borrar
+	textoCifrado := utils.EncryptMessage("🚫 Este archivo multimedia fue eliminado")
+	update := bson.M{
+		"$set": bson.M{
+			"file_url": "",
+			"texto":    textoCifrado,
+		},
+	}
+	_, err = db.GetCollection("mensajes").UpdateOne(c.Request.Context(), bson.M{"_id": mensaje.Id}, update)
+	if err != nil {
+		log.Printf("Error actualizando mensaje en MongoDB: %v", err)
+	}
+
+	// Emitir evento por WebSocket para eliminar en UI
+	if hub != nil {
+		hub.Broadcast <- sockets.Mensaje{
+			Tipo:      "delete_message",
+			SalaID:    mensaje.SalaID,
+			FileURL:   fileURL,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Archivo eliminado correctamente"})
 }

@@ -10,7 +10,7 @@ import { JoinRoomModal } from '@/components/home/JoinRoomModal';
 import { EditRoomModal } from '@/components/home/EditRoomModal';
 import { DeleteModal } from '@/components/home/DeleteRoomModal'; // Importar el modal
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
 
 export default function HomePage() {
   const router = useRouter();

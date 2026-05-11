@@ -39,20 +39,22 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		return
 	}
 
-	clientIP := getRealIP(c) // Usar getRealIP para normalizar ::1 → 127.0.0.1
-
-	// === CAPA DEFINITIVA: Verificar si este DeviceID o esta IP ya tiene un WebSocket activo ===
-	// Bloquea: misma pestaña, incógnito, Y otro navegador en la misma máquina.
-	if hub.IsDeviceOrIPConnected(deviceID, clientIP) {
-		c.JSON(http.StatusConflict, gin.H{
-			"error": "Este dispositivo ya tiene una conexión activa. Solo se permite una sesión por dispositivo.",
-		})
-		return
-	}
-
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al establecer conexión WebSocket"})
+		return
+	}
+
+	clientIP := getRealIP(c) // Usar getRealIP para normalizar ::1 → 127.0.0.1
+
+	// === CAPA DEFINITIVA: Verificar si este DeviceID o Nickname ya tiene un WebSocket activo ===
+	// Bloquea: misma pestaña, incógnito, o mismo usuario en otra máquina.
+	if hub.IsDeviceOrNicknameConnected(deviceID, nickname) {
+		conn.WriteJSON(sockets.Mensaje{
+			Tipo:  "error",
+			Texto: "⚠️ Conexión Rechazada: Se detectó un intento de clonar la sesión o usar un nombre ocupado desde otra pestaña. Para mantener la integridad del chat, solo se permite una única ventana activa.",
+		})
+		conn.Close()
 		return
 	}
 
@@ -63,7 +65,7 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		if activeSession != expectedSession {
 			conn.WriteJSON(sockets.Mensaje{
 				Tipo:  "error",
-				Texto: "Este dispositivo ya tiene una sesión activa. Cierra la sesión anterior antes de abrir una nueva.",
+				Texto: "⚠️ Conflicto de Estado: Redis detectó que tu dispositivo ya está anclado a una sesión distinta. Cierra la pestaña anterior o presiona el botón 'Salir de la sala' antes de reconectarte.",
 			})
 			conn.Close()
 			return

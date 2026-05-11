@@ -2,6 +2,7 @@ package sockets
 
 import (
 	"chat_distribuido/db"
+	"chat_distribuido/utils"
 	"context"
 	"encoding/json"
 	"log"
@@ -165,6 +166,12 @@ func (h *Hub) Run() {
 					if msg.Timestamp == 0 {
 						msg.Timestamp = time.Now().Unix()
 					}
+					
+					// Cifrar el texto antes de guardar en la DB
+					if msg.Texto != "" {
+						msg.Texto = utils.EncryptMessage(msg.Texto)
+					}
+
 					_, err := collection.InsertOne(context.Background(), msg)
 					if err != nil {
 						log.Printf("Error persistiendo mensaje en MongoDB: %v", err)
@@ -273,13 +280,13 @@ func (h *Hub) GetRoomUserCount(roomID string) int {
 // WebSocket activa en cualquier sala. Esto bloquea:
 // - Misma pestaña/incógnito (mismo DeviceID por Canvas Fingerprint)
 // - Diferente navegador en la misma máquina (misma IP local)
-func (h *Hub) IsDeviceOrIPConnected(deviceId string, ip string) bool {
+func (h *Hub) IsDeviceOrNicknameConnected(deviceId string, nickname string) bool {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
 	for _, clients := range h.Salas {
 		for client := range clients {
-			if client.DeviceId == deviceId || client.Ip == ip {
+			if client.DeviceId == deviceId || client.Nickname == nickname {
 				return true
 			}
 		}

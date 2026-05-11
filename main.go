@@ -7,7 +7,9 @@ import (
 	"chat_distribuido/middleware"
 	"context"
 	"log"
+	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -64,6 +66,21 @@ func main() {
 	// Configurar router
 	r := gin.Default()
 	r.SetTrustedProxies(nil) // Fix: No confiar en todos los proxies por defecto (Seguridad)
+
+	// Middleware para bloquear localhost (IP y Origin)
+	r.Use(func(c *gin.Context) {
+		ip := c.ClientIP()
+		origin := c.Request.Header.Get("Origin")
+
+		if ip == "127.0.0.1" || ip == "::1" || strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "Acceso denegado: Usa la IP de la red local (ej. 192.168.x.x) en lugar de localhost.",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
 
 	// Configurar CORS
 	r.Use(func(c *gin.Context) {
@@ -140,6 +157,7 @@ func main() {
 	uploadRoutes.Use(middleware.AuthMiddlewareUser())
 	{
 		uploadRoutes.POST("/file", controladores.UploadFileHandler)
+		uploadRoutes.DELETE("/file/:filename", controladores.DeleteFileHandler)
 	}
 
 	port := os.Getenv("PORT")

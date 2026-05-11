@@ -6,22 +6,7 @@ Sistema de mensajería distribuida con soporte para salas de texto y multimedia,
 
 ## 🏗️ Arquitectura
 
-```
-┌─────────────────────────────┐
-│  Frontend (Next.js 15)       │  http://localhost:3000
-│  React 19 + TailwindCSS      │
-└────────────┬────────────────┘
-             │  HTTP REST + WebSocket
-┌────────────▼────────────────┐
-│  Backend (Go + Gin)          │  http://localhost:8080
-│  MongoDB + Redis + MinIO     │
-└────────────┬────────────────┘
-             │
-┌────────────▼────────────────┐
-│  Infraestructura (Docker)    │
-│  MongoDB  · Redis · MinIO    │
-└─────────────────────────────┘
-```
+![Arquitectura del Chat Distribuido](docs/arquitectura.png)
 
 ---
 

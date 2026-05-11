@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
 
@@ -11,11 +11,15 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'user' | 'admin'>('user');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [nickname, setNickname] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('nickname') || '' : ''));
+  const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setNickname(localStorage.getItem('nickname') || '');
+  }, []);
   
-  const API = process.env.NEXT_PUBLIC_API_URL ;
+  const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +47,10 @@ export default function LoginPage() {
     } else {
       if (!nickname.trim()) {
         setError('El nickname es requerido');
+        setLoading(false);
+        return;
       } else {
         login(null, nickname.trim(), 'user_' + Math.random().toString(36).substring(2, 11),false);
-        console.log("admin here not")
         router.push('/home');
       }
     }

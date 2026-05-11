@@ -6,6 +6,13 @@ echo =========================================
 echo Levantando servicios base con Docker Compose (MongoDB, Redis, MinIO) en WSL...
 wsl docker compose up -d
 
+echo Esperando 3 segundos para asegurar que la base de datos MongoDB despierte...
+timeout /t 3 /nobreak > NUL
+
+echo.
+echo Configurando red local automaticamente...
+node setup_local.js
+
 echo Iniciando el backend (Go)...
 start "Backend (Go)" cmd /k "go run main.go"
 
@@ -14,7 +21,5 @@ start "Frontend (Next.js)" cmd /k "cd frontend-next && npm run dev"
 
 echo.
 echo Los servicios se estan ejecutando en ventanas separadas.
-echo Backend deberia estar en el puerto correspondiente (ej. 8080/8000).
-echo Frontend deberia estar en http://localhost:3000
 echo.
 pause

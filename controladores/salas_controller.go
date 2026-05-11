@@ -250,11 +250,10 @@ func UnirseSalaHandler(c *gin.Context) {
 
 	clientIP := getRealIP(c)
 
-	// === CAPA 0: Verificar en el Hub si ya hay un WebSocket activo para este dispositivo/IP ===
-	// Esto bloquea ANTES de cualquier registro: otro navegador, incógnito, pestaña duplicada.
-	if hub.IsDeviceOrIPConnected(req.DeviceID, clientIP) {
+	// === CAPA 0: Verificar en el Hub si ya hay un WebSocket activo para este dispositivo o Nickname ===
+	if hub.IsDeviceOrNicknameConnected(req.DeviceID, req.Nickname) {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "Este dispositivo ya tiene una conexión activa. Solo se permite una sesión por dispositivo.",
+			"error": "⚠️ Bloqueo de Seguridad: El nombre '" + req.Nickname + "' ya está en uso, o tu navegador actual ya tiene una ventana de chat abierta. Cierra tus otras pestañas o elige otro nombre.",
 		})
 		return
 	}
@@ -271,17 +270,13 @@ func UnirseSalaHandler(c *gin.Context) {
 		}
 	}
 
-	// === CAPA 2: Verificar en MongoDB si este DeviceID ya tiene un usuario activo ===
 	var usuarioActivoPorDevice modelos.Usuario
 	errDevice := db.GetCollection("usuarios").FindOne(c.Request.Context(),
 		bson.M{"device_id": req.DeviceID, "activo": true}).Decode(&usuarioActivoPorDevice)
 	if errDevice == nil {
 		if usuarioActivoPorDevice.Nickname != req.Nickname || usuarioActivoPorDevice.SalaID != req.SalaID {
-			// Ya existe un usuario activo con este DeviceID - BLOQUEAR
-			fmt.Printf("BLOQUEO SESIÓN DUPLICADA: DeviceID=%s ya activa como '%s' en sala '%s'\n",
-				req.DeviceID, usuarioActivoPorDevice.Nickname, usuarioActivoPorDevice.SalaID)
 			c.JSON(http.StatusConflict, gin.H{
-				"error": "Este dispositivo ya tiene una sesión activa en otra sala o con otro usuario.",
+				"error": "⚠️ Sesión Duplicada Detectada: El sistema ha detectado que tu navegador (DeviceID) ya está conectado en otra sala. Solo puedes estar activo en una sala a la vez.",
 			})
 			return
 		}
@@ -598,9 +593,24 @@ func GetMessagesHandler(c *gin.Context) {
 	}
 
 	// Como los obtuvimos ordenados descendentemente (para tener los más recientes),
-	// los invertimos para devolverlos en orden cronológico ascendente.
+	// los invertimos para devolverlos en orden cronológico ascendente y desciframos.
 	for i, j := 0, len(mensajes)-1; i < j; i, j = i+1, j-1 {
+		// Descifrar si tiene texto
+		if mensajes[i].Texto != "" {
+			mensajes[i].Texto = utils.DecryptMessage(mensajes[i].Texto)
+		}
+		if mensajes[j].Texto != "" {
+			mensajes[j].Texto = utils.DecryptMessage(mensajes[j].Texto)
+		}
 		mensajes[i], mensajes[j] = mensajes[j], mensajes[i]
+	}
+
+	// Si hay número impar de mensajes, el del medio no se descifró en el bucle anterior
+	if len(mensajes)%2 != 0 {
+		mid := len(mensajes) / 2
+		if mensajes[mid].Texto != "" {
+			mensajes[mid].Texto = utils.DecryptMessage(mensajes[mid].Texto)
+		}
 	}
 
 	if mensajes == nil {
