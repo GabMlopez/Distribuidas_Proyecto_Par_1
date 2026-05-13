@@ -27,13 +27,15 @@ WORKDIR /app
 # Copiar el binario compilado
 COPY --from=builder /app/main .
 
+# Crear directorio para uploads
 RUN mkdir -p /app/uploads && chown -R appuser:appuser /app/uploads
 
 USER appuser
 
+# EXPOSE es solo documentación - Render usará la variable PORT
 EXPOSE 8085
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8085/health || exit 1
+  CMD curl -f http://localhost:${PORT:-8085}/health || exit 1
 
 CMD ["./main"]
