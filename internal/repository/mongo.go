@@ -55,6 +55,8 @@ func GetCollection(collectionName string) *mongo.Collection {
 
 func DisconnectDB() {
 	if cliente != nil {
-		cliente.Disconnect(context.Background())
+		if err := cliente.Disconnect(context.Background()); err != nil {
+			log.Printf("Error desconectando de MongoDB: %v", err)
+		}
 	}
 }

@@ -99,3 +99,30 @@ func TestNicknameError(t *testing.T) {
 		t.Errorf("Expected error message 'Nickname duplicado', got '%s'", err.Error())
 	}
 }
+
+func TestVerificarCapacidadSala(t *testing.T) {
+	// Test when hub is nil
+	hub = nil
+	err := verificarCapacidadSala("room1")
+	if err != nil {
+		t.Errorf("verificarCapacidadSala should return nil when hub is nil")
+	}
+
+	// Mock hub is difficult here without proper interface, 
+	// but we covered the nil branch.
+}
+
+func TestListaSalas_NoHub(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
+	r.GET("/rooms/list", ListaSalas)
+
+	hub = nil
+	req, _ := http.NewRequest(http.MethodGet, "/rooms/list", nil)
+	resp := httptest.NewRecorder()
+	r.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status 500 when hub is nil, got %d", resp.Code)
+	}
+}

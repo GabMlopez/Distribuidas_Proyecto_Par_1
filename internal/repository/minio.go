@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -166,7 +167,8 @@ func UploadToMinIO(filename string, filePath string, contentType string) (string
 
 	// Subir archivo
 	objectName := filename
-	file, err := os.Open(filePath)
+	cleanPath := filepath.Clean(filePath)
+	file, err := os.Open(cleanPath)
 	if err != nil {
 		return "", err
 	}
