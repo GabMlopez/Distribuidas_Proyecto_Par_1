@@ -106,14 +106,6 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     const finalDeviceId = userContext?.deviceId || 'dev_fallback';
     const roomUserId = sessionStorage.getItem('room_user_id');
     const fallbackUserId = userContext?.userId;
-    
-    console.log('Conectando WebSocket con:', { 
-      nickname: finalNickname, 
-      roomId, 
-      deviceId: finalDeviceId, 
-      roomUserId,
-      isAdmin: userContext?.isAdmin 
-    });
 
     setWsStatus('connecting');
     const wsProtocol = API?.startsWith('https') ? 'wss' : 'ws';
@@ -310,6 +302,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const leaveRoom = async () => {
     try {
       const roomUserId = sessionStorage.getItem('room_user_id');
+  
       await fetch(`${API}/rooms/leave`, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },

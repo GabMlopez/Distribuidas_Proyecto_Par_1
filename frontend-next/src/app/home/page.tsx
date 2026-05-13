@@ -222,7 +222,7 @@ const joinRoom = async () => {
     const data = await res.json();
     if (res.ok) {
       const backendUserId = data.usuario_id;
-      
+      console.log(data)
       // Guardar token de sala SEPARADAMENTE
       sessionStorage.setItem('room_token', data.token);
       sessionStorage.setItem('room_name', selectedRoom.nombre || selectedRoom.sala_id);
