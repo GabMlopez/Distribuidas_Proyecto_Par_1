@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, use, useCallback } from 'react';
+import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
 import { ChatMessage as MsgType, UploadTask } from '@/types';
@@ -8,7 +8,7 @@ import { ChatMessage } from '@/components/room/ChatMessage';
 import { ChatSidebar } from '@/components/room/ChatSidebar';
 import { UploadToast } from '@/components/room/ProgressModal';
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
@@ -16,11 +16,9 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
   const { userContext } = useUser();
 
-  const [roomName, setRoomName] = useState(roomId);
-  const [roomType, setRoomType] = useState('texto');
-  const [roomToken, setRoomToken] = useState('');
-  const [isReady, setIsReady] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [roomName, setRoomName] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_name') || roomId : roomId);
+  const [roomType, setRoomType] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_type') || 'texto' : 'texto');
+  const [roomToken, setRoomToken] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_token') || '' : '');
 
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [messages, setMessages] = useState<MsgType[]>([]);
@@ -28,113 +26,71 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [users, setUsers] = useState<string[]>([]);
   const [wsStatus, setWsStatus] = useState('connecting');
   const [uploads, setUploads] = useState<UploadTask[]>([]);
+  const [sessionError, setSessionError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatBodyRef = useRef<HTMLDivElement>(null);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  const loadHistoricalMessages = useCallback(async (tokenToUse?: string) => {
-    const finalRoomToken = tokenToUse || sessionStorage.getItem('room_token');
-    if (!finalRoomToken) {
-      setLoadingHistory(false);
-      return;
-    }
-    
-    try {
-      const response = await fetch(`${API}/rooms/${roomId}/messages?limit=50`, {
-        headers: {
-          'Authorization': `Bearer ${finalRoomToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.messages && data.messages.length > 0) {
-          setMessages(data.messages);
-        } else {
-          console.log('No hay mensajes históricos');
-        }
-      } else {
-        console.error('Error al cargar historial:', response.status);
-      }
-    } catch (error) {
-      console.error('Error loading historical messages:', error);
-    } finally {
-      setLoadingHistory(false);
-    }
-  }, [roomId, API]);
-
-  // PRIMER useEffect: Restaurar datos de sala
   useEffect(() => {
-    const savedNickname = sessionStorage.getItem('chat_nickname');
-    const savedRoomToken = sessionStorage.getItem('room_token');
-    const savedRoomName = sessionStorage.getItem('room_name');
-    const savedRoomType = sessionStorage.getItem('room_type');
+    // Al haber arreglado el Hydration Mismatch, el contexto inicia vacío.
+    // Usamos localStorage como respaldo para no redirigir prematuramente al login.
+    const localNickname = typeof window !== 'undefined' ? localStorage.getItem('nickname') : null;
+    const currentNickname = userContext?.nickname || localNickname || '';
 
-    // Solo restaurar el token de sala
-    if (savedRoomToken && !roomToken) {
-      setRoomToken(savedRoomToken);
-    }
-
-    if (savedRoomName) setRoomName(savedRoomName);
-    if (savedRoomType) setRoomType(savedRoomType);
-    
-    setIsReady(true);
-  }, []); 
-
-  // SEGUNDO useEffect: Conectar WebSocket y cargar historial
-  useEffect(() => {
-    if (!isReady) return;
-    
-    const savedNickname = sessionStorage.getItem('chat_nickname');
-    if (!userContext?.nickname && !savedNickname) {
-      router.push('/');
+    if (!currentNickname) {
+      router.push('/'); 
       return;
     }
 
-    let finalRoomToken = sessionStorage.getItem('room_token');
-    if (!finalRoomToken) {
-      console.error('No hay token de sala');
-      router.push('/home');
+    // Esperar a que el deviceId se haya generado/rehidratado
+    const localDeviceId = typeof window !== 'undefined' ? localStorage.getItem('deviceId') || sessionStorage.getItem('deviceId') : null;
+    const currentDeviceId = userContext?.deviceId || localDeviceId;
+    if (!currentDeviceId) {
       return;
     }
-    
-    setRoomToken(finalRoomToken);
 
-    const finalNickname = userContext?.nickname || savedNickname;
-    const finalDeviceId = userContext?.deviceId || 'dev_fallback';
-    const roomUserId = sessionStorage.getItem('room_user_id');
-    const fallbackUserId = userContext?.userId;
+    // Cargar historial de mensajes (sin caché para asegurar frescura al F5)
+    fetch(`${API}/rooms/${roomId}/messages?t=${Date.now()}`, { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setMessages(data);
+          setTimeout(() => { 
+            if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight; 
+          }, 100);
+        }
+      })
+      .catch(err => console.error('Error fetching message history:', err));
 
     setWsStatus('connecting');
-    const wsProtocol = API?.startsWith('https') ? 'wss' : 'ws';
-    const wsHost = API?.replace(/^https?:\/\//, '') || 'localhost:8080';
-    const url = `${wsProtocol}://${wsHost}/ws/${roomId}?nickname=${encodeURIComponent(finalNickname)}&sala_id=${roomId}&device_id=${finalDeviceId}`;
+    const wsProtocol = API.startsWith('https') ? 'wss' : 'ws';
+    const wsHost = API.replace(/^https?:\/\//, '');
+    const url = `${wsProtocol}://${wsHost}/ws/${roomId}?nickname=${encodeURIComponent(currentNickname)}&sala_id=${roomId}&device_id=${currentDeviceId}`;
     
     const websocket = new WebSocket(url);
-    
-    websocket.onopen = () => {
-      console.log(' WebSocket conectado exitosamente');
-      setWsStatus('open');
-      loadHistoricalMessages(finalRoomToken);
-    };
-    
-    websocket.onclose = (event) => {
-      console.log('WebSocket cerrado:', event.code, event.reason);
-      setWsStatus('closed');
-    };
-    
-    websocket.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-      setWsStatus('error');
-    };
-    
+    websocket.onopen = () => setWsStatus('open');
+    websocket.onclose = () => setWsStatus('closed');
     websocket.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        console.log('Mensaje recibido:', data);
         
+        if (data.tipo === 'error' || data.type === 'error') {
+          setSessionError(data.texto || 'Error de sesión duplicada.');
+          websocket.close();
+          return;
+        }
+
+        if (data.tipo === 'delete_message' || data.type === 'delete_message') {
+          setMessages(prev => prev.map(m => 
+            m.file_url === data.file_url 
+              ? { ...m, file_url: undefined, texto: '🚫 Este archivo multimedia fue eliminado' } 
+              : m
+          ));
+          return;
+        }
+
         if (data.type === 'user_list' || data.tipo === 'user_list') {
           try {
             const parsed = typeof data.texto === 'string' ? JSON.parse(data.texto) : data;
@@ -145,36 +101,28 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         } 
         else if (data.tipo === 'join' || data.type === 'join') {
           setMessages(prev => [...prev, {
-            tipo: 'system',
+            type: 'system',
             texto: data.texto || `${data.nickname} se unió a la sala`,
             nickname: 'Sistema',
             timestamp: data.timestamp || Date.now() / 1000
-          } as MsgType]);
+          }]);
           setTimeout(() => { 
             if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight; 
           }, 50);
         }
         else if (data.tipo === 'leave' || data.type === 'leave') {
           setMessages(prev => [...prev, {
-            tipo: 'system',
+            type: 'system',
             texto: data.texto || `${data.nickname} salió de la sala`,
             nickname: 'Sistema',
             timestamp: data.timestamp || Date.now() / 1000
-          } as MsgType]);
+          }]);
           setTimeout(() => { 
             if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight; 
           }, 50);
         }
         else {
-          setMessages(prev => {
-            const exists = prev.some(msg => 
-              msg.timestamp === data.timestamp && 
-              msg.nickname === data.nickname && 
-              msg.texto === data.texto
-            );
-            if (exists) return prev;
-            return [...prev, data];
-          });
+          setMessages(prev => [...prev, data]);
           setTimeout(() => { 
             if (chatBodyRef.current) chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight; 
           }, 50);
@@ -186,140 +134,149 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
     setWs(websocket);
 
-    const handleBeforeUnload = () => {
-      if (websocket.readyState === WebSocket.OPEN) {
-        const payload = JSON.stringify({ 
-          sala_id: roomId, 
-          nickname: finalNickname, 
-          device_id: finalDeviceId,
-          usuario_id: roomUserId || fallbackUserId 
-        });
-        navigator.sendBeacon(`${API}/rooms/leave`, new Blob([payload], { type: 'application/json' }));
-        websocket.close();
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => { 
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (websocket.readyState === WebSocket.OPEN) {
-        websocket.close();
-      }
+      websocket.close(); 
     };
-  }, [roomId, userContext?.nickname, userContext?.deviceId, userContext?.isAdmin, isReady, router, loadHistoricalMessages, API]);
+  }, [roomId, userContext, router]);
 
   const sendMessage = () => {
     if (!currentMessage.trim() || !ws || ws.readyState !== WebSocket.OPEN) return;
-    
-    const message = { 
-      tipo: 'chat',
-      texto: currentMessage.trim(),
-      timestamp: Math.floor(Date.now() / 1000)
-    };
-    
-    ws.send(JSON.stringify(message));
+    ws.send(JSON.stringify({ tipo: 'chat', texto: currentMessage.trim() }));
     setCurrentMessage('');
   };
 
   const uploadFile = (file: File) => {
-    return new Promise((resolve) => {
-      const id = Math.random().toString(36).slice(2);
-      const MAX_SIZE = 10 * 1024 * 1024;
-      
-      if (file.size > MAX_SIZE) {
-        setUploads(prev => [...prev, { 
-          id, 
-          name: file.name, 
-          progress: 0, 
-          done: true, 
-          error: `Archivo demasiado grande (máx. 10MB)` 
-        }]);
-        resolve(false);
-        return;
-      }
-      setUploads(prev => [...prev, { id, name: file.name, progress: 0, done: false, error: null }]);
+  return new Promise((resolve, reject) => {
+    const id = Math.random().toString(36).slice(2);
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    
+    if (file.size > MAX_SIZE) {
+      setUploads(prev => [...prev, { 
+        id, 
+        name: file.name, 
+        progress: 0, 
+        done: true, 
+        error: `Archivo demasiado grande (máx. 10MB)` 
+      }]);
+      resolve(false);
+      return;
+    }
+    setUploads(prev => [...prev, { id, name: file.name, progress: 0, done: false, error: null }]);
 
-      const formData = new FormData();
-      formData.append('sala_id', roomId);
-      formData.append('file', file);
+    const formData = new FormData();
+    formData.append('sala_id', roomId);
+    formData.append('file', file);
 
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.addEventListener('progress', (ev) => {
-        if (ev.lengthComputable) {
-          const percentComplete = Math.round((ev.loaded / ev.total) * 100);
-          setUploads(prev => prev.map(u => 
-            u.id === id ? { ...u, progress: percentComplete } : u
-          ));
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          setUploads(prev => prev.map(u => 
-            u.id === id ? { ...u, progress: 100, done: true, error: null } : u
-          ));
-          setTimeout(() => setUploads(prev => prev.filter(u => u.id !== id)), 2000);
-          resolve(true);
-        } else {
-          let errorMsg = 'Error al subir';
-          try {
-            const response = JSON.parse(xhr.responseText);
-            errorMsg = response.error || response.message || errorMsg;
-          } catch {
-            errorMsg = `Error ${xhr.status}: ${xhr.statusText || 'Error desconocido'}`;
-          }
-          setUploads(prev => prev.map(u => 
-            u.id === id ? { ...u, done: true, error: errorMsg } : u
-          ));
-          setTimeout(() => setUploads(prev => prev.filter(u => u.id !== id)), 3000);
-          resolve(false);
-        }
-      });
-
-      xhr.addEventListener('error', () => {
+    const xhr = new XMLHttpRequest();
+    
+    xhr.upload.addEventListener('progress', (ev) => {
+      if (ev.lengthComputable) {
+        const percentComplete = Math.round((ev.loaded / ev.total) * 100);
+        console.log(`Progreso ${file.name}: ${percentComplete}%`);
         setUploads(prev => prev.map(u => 
-          u.id === id ? { ...u, done: true, error: 'Error de conexión al servidor' } : u
+          u.id === id ? { ...u, progress: percentComplete } : u
         ));
-        setTimeout(() => setUploads(prev => prev.filter(u => u.id !== id)), 3000);
-        resolve(false);
-      });
-
-      const finalToken = roomToken || sessionStorage.getItem('room_token');
-      xhr.open('POST', `${API}/upload/file`);
-      xhr.setRequestHeader('Authorization', `Bearer ${finalToken}`);
-      xhr.send(formData);
+      }
     });
-  };
 
-  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.length) return;
-    const filesArray = Array.from(e.target.files);
-    e.target.value = '';
-    await Promise.all(filesArray.map(file => uploadFile(file)));
+    xhr.addEventListener('load', () => {
+      console.log(`Respuesta ${file.name}: Status ${xhr.status}`);
+      
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setUploads(prev => prev.map(u => 
+          u.id === id ? { ...u, progress: 100, done: true, error: null } : u
+        ));
+        
+        setTimeout(() => {
+          setUploads(prev => prev.filter(u => u.id !== id));
+        }, 2000);
+        
+        resolve(true);
+      } else {
+        let errorMsg = 'Error al subir';
+        try {
+          const response = JSON.parse(xhr.responseText);
+          errorMsg = response.error || response.message || errorMsg;
+        } catch {
+          errorMsg = `Error ${xhr.status}: ${xhr.statusText || 'Error desconocido'}`;
+        }
+        
+        setUploads(prev => prev.map(u => 
+          u.id === id ? { ...u, done: true, error: errorMsg } : u
+        ));
+        
+        setTimeout(() => {
+          setUploads(prev => prev.filter(u => u.id !== id));
+        }, 3000);
+        
+        resolve(false);
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      console.error(`Error de red al subir ${file.name}`);
+      setUploads(prev => prev.map(u => 
+        u.id === id ? { ...u, done: true, error: 'Error de conexión al servidor' } : u
+      ));
+      
+      setTimeout(() => {
+        setUploads(prev => prev.filter(u => u.id !== id));
+      }, 3000);
+      
+      resolve(false);
+    });
+
+
+    xhr.addEventListener('abort', () => {
+      console.log(`Upload abortado: ${file.name}`);
+      setUploads(prev => prev.filter(u => u.id !== id));
+      resolve(false);
+    });
+
+    xhr.open('POST', `${API}/upload/file`);
+    xhr.setRequestHeader('Authorization', `Bearer ${roomToken}`);
+    xhr.send(formData);
+  });
+};
+
+const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (!e.target.files?.length) return;
+  const filesArray = Array.from(e.target.files);
+  e.target.value = '';
+  
+  await Promise.all(filesArray.map(file => uploadFile(file)));
+};
+
+  const deleteFile = async (fileUrl: string) => {
+    if (!fileUrl) return;
+    const filename = fileUrl.split('/').pop();
+    if (!filename) return;
+
+    try {
+      const res = await fetch(`${API}/upload/file/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${roomToken}` }
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Error al borrar el archivo:', res.status, errorText);
+      }
+    } catch (err) {
+      console.error('Error de red al borrar el archivo', err);
+    }
   };
 
   const leaveRoom = async () => {
     try {
-      const roomUserId = sessionStorage.getItem('room_user_id');
-  
       await fetch(`${API}/rooms/leave`, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          sala_id: roomId, 
-          usuario_id: roomUserId || userContext.userId 
-        })
+        body: JSON.stringify({ sala_id: roomId, usuario_id: userContext.userId })
       });
     } catch (e) {
       console.error('Error leaving room:', e);
     } finally {
       if (ws) ws.close();
-      // Limpiar SOLO los datos de la sala
-      sessionStorage.removeItem('room_token');
-      sessionStorage.removeItem('room_name');
-      sessionStorage.removeItem('room_type');
-      sessionStorage.removeItem('room_user_id');
       router.push('/home');
     }
   };
@@ -329,58 +286,93 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (!isReady || loadingHistory) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-900">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-white/20 border-t-indigo-400 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-400">
-            {loadingHistory ? 'Cargando mensajes...' : 'Cargando sala...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (!userContext?.nickname) return null;
 
   return (
     <div className="flex h-screen overflow-hidden relative">
-      <UploadToast uploads={uploads} onRemove={(id) => setUploads(prev => prev.filter(u => u.id !== id))} />
-
-      {isSidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+      {sessionError && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-red-500/30 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-red-500">
+                <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2"/>
+                <line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2"/>
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Acceso Denegado</h2>
+            <p className="text-slate-400 mb-6">{sessionError}</p>
+            <button 
+              onClick={() => router.push('/home')}
+              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-xl transition-colors font-medium w-full"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        </div>
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-[280px] bg-slate-950 transition-transform duration-300 ease-in-out transform md:relative md:translate-x-0 md:z-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Toast de uploads */}
+      <UploadToast 
+        uploads={uploads} 
+          onRemove={(id) => setUploads(prev => prev.filter(u => u.id !== id))}
+      />
+
+      {/* Sidebar overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-[280px] bg-slate-950 transition-transform duration-300 ease-in-out transform
+        md:relative md:translate-x-0 md:z-auto
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         <ChatSidebar 
           roomName={roomName} 
           roomType={roomType} 
           wsStatus={wsStatus} 
           users={users} 
-          myNickname={userContext.nickname || sessionStorage.getItem('chat_nickname') || ''} 
+          myNickname={userContext.nickname} 
           leaveRoom={leaveRoom} 
         />
       </aside>
 
+      {/* Main chat area */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-900/30 overflow-hidden">
+        
+        {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 bg-slate-950/65 backdrop-blur-md border-b border-white/15 shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-slate-400 hover:text-white transition-colors">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 text-slate-400 hover:text-white transition-colors"
+            >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="3" y1="12" x2="21" y2="12"/>
                 <line x1="3" y1="6" x2="21" y2="6"/>
                 <line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
             </button>
+
             <div className="flex items-center gap-2.5 text-[0.9rem]">
               <div className={`w-2 h-2 rounded-full shadow-[0_0_6px_currentColor] ${roomType === 'multimedia' ? 'bg-pink-400 text-pink-400' : 'bg-indigo-300 text-indigo-300'}`}></div>
               <span className="truncate max-w-[150px] md:max-w-none"><strong>{roomName}</strong></span>
             </div>
           </div>
-          <div className="text-[0.75rem] text-slate-500 hidden sm:block">{messages.length} mensajes</div>
+
+          <div className="text-[0.75rem] text-slate-500 hidden sm:block">
+            {messages.length} mensajes
+          </div>
         </div>
 
+        {/* Messages area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-3" ref={chatBodyRef}>
-          {messages.length === 0 && !loadingHistory && (
+          {messages.length === 0 && (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500 opacity-70">
               <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -392,13 +384,15 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
             <ChatMessage 
               key={idx} 
               msg={msg} 
-              isOwn={msg.nickname === (userContext.nickname || sessionStorage.getItem('chat_nickname'))} 
+              isOwn={msg.nickname === userContext.nickname} 
               formatTime={formatTime} 
               api={API} 
+              onDeleteFile={deleteFile}
             />
           ))}
         </div>
 
+        {/* Input area */}
         <div className="px-4 py-3 md:px-5 md:py-3.5 bg-slate-950/75 backdrop-blur-[20px] border-t border-white/15 flex items-center gap-2.5 shrink-0">
           {roomType === 'multimedia' && (
             <label className="w-10 h-10 shrink-0 rounded-xl bg-white/5 border border-white/15 flex items-center justify-center cursor-pointer text-slate-500 hover:bg-white/10 transition-all hover:text-indigo-400">

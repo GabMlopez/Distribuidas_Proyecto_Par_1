@@ -1,4 +1,4 @@
-package modelos
+package models
 
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
@@ -10,5 +10,6 @@ type Mensaje struct {
 	Tipo      string             `bson:"tipo" json:"tipo"`
 	Timestamp int64              `bson:"timestamp" json:"timestamp"`
 	FileURL   string             `bson:"file_url" json:"file_url,omitempty"`
-	Texto     string             `bson:"texto" json:"texto"`
+	Texto     string                 `bson:"texto" json:"texto"`
+	Metadata  map[string]interface{} `bson:"metadata,omitempty" json:"metadata,omitempty"`
 }

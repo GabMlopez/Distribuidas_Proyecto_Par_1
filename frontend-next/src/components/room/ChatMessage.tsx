@@ -9,9 +9,10 @@ interface ChatMessageProps {
   isOwn: boolean;
   formatTime: (ts?: number) => string;
   api: string;
+  onDeleteFile?: (fileUrl: string) => void;
 }
 
-export function ChatMessage({ msg, isOwn, formatTime, api }: ChatMessageProps) {
+export function ChatMessage({ msg, isOwn, formatTime, api, onDeleteFile }: ChatMessageProps) {
   const [imageError, setImageError] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
@@ -75,9 +76,23 @@ export function ChatMessage({ msg, isOwn, formatTime, api }: ChatMessageProps) {
             )}
 
             {fileUrl && (
-              <div className="mt-2">
+              <div className="mt-2 relative group">
+                {/* El botón global absoluto fue eliminado en favor de botones específicos por tipo de archivo */}
+
                 {isImage && !imageError && (
-                  <div className="relative">
+                  <div className="relative group/img inline-block">
+                    {isOwn && onDeleteFile && (
+                      <button 
+                        onClick={() => onDeleteFile(fileUrl)}
+                        title="Eliminar imagen"
+                        className="absolute top-2 right-2 z-10 w-6 h-6 bg-black/50 hover:bg-red-500/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-all backdrop-blur-sm shadow-sm"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </button>
+                    )}
                     {!isImageLoaded && (
                       <div className="w-full h-40 bg-white/5 rounded-lg animate-pulse flex items-center justify-center">
                         <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,17 +127,32 @@ export function ChatMessage({ msg, isOwn, formatTime, api }: ChatMessageProps) {
                 )}
 
                 {(isPDF || (!isImage && fileUrl)) && (
-                  <a
-                    href={fullImageUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg text-sm text-indigo-300 hover:bg-white/10 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    {msg.texto || 'Descargar archivo'}
-                  </a>
+                  <div className="flex items-center gap-2 mt-1">
+                    <a
+                      href={fullImageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg text-sm text-indigo-300 hover:bg-white/10 transition-colors max-w-full truncate"
+                    >
+                      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                      <span className="truncate">{msg.texto || 'Descargar archivo'}</span>
+                    </a>
+                    
+                    {isOwn && onDeleteFile && (
+                      <button 
+                        onClick={() => onDeleteFile(fileUrl)}
+                        title="Eliminar archivo"
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"></polyline>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}

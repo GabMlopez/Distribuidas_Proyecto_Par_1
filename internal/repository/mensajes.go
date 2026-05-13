@@ -1,7 +1,7 @@
-package db
+package repository
 
 import (
-	"chat_distribuido/modelos"
+	"chat_distribuido/internal/models"
 	"context"
 	"log"
 	"time"
@@ -13,7 +13,7 @@ import (
 )
 
 // GuardarMensaje guarda un mensaje en MongoDB
-func GuardarMensaje(mensaje modelos.Mensaje) error {
+func GuardarMensaje(mensaje models.Mensaje) error {
 	collection := GetCollection("mensajes")
 
 	// Establecer ID si no tiene
@@ -39,7 +39,7 @@ func GuardarMensaje(mensaje modelos.Mensaje) error {
 }
 
 // ObtenerHistorialMensajes obtiene los últimos mensajes de una sala
-func ObtenerHistorialMensajes(salaID string, limit int64, offset int64) ([]modelos.Mensaje, error) {
+func ObtenerHistorialMensajes(salaID string, limit int64, offset int64) ([]models.Mensaje, error) {
 	collection := GetCollection("mensajes")
 
 	// Opciones de búsqueda
@@ -58,7 +58,7 @@ func ObtenerHistorialMensajes(salaID string, limit int64, offset int64) ([]model
 	}
 	defer cursor.Close(ctx)
 
-	var messages []modelos.Mensaje
+	var messages []models.Mensaje
 	if err = cursor.All(ctx, &messages); err != nil {
 		log.Printf("Error decodificando mensajes: %v", err)
 		return nil, err
