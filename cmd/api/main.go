@@ -18,9 +18,14 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("Error cargando .env file")
+	// Verificar si estamos en Render
+	if os.Getenv("RENDER") == "" {
+		// Solo en desarrollo local
+		if err := godotenv.Load(); err != nil {
+			log.Println("No se encontró archivo .env")
+		}
+	} else {
+		log.Println("Ejecutando en Render, usando variables del entorno")
 	}
 
 	repository.ConnectDB()
