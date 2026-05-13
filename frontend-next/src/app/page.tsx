@@ -19,7 +19,7 @@ export default function LoginPage() {
     setNickname(localStorage.getItem('nickname') || '');
   }, []);
   
-  const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
+  const API = process.env.NEXT_PUBLIC_API_URL ;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
