@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"chat_distribuido/internal/repository"
 	"chat_distribuido/internal/models"
+	"chat_distribuido/internal/repository"
 	"chat_distribuido/internal/utils"
 	"net/http"
 
