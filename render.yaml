@@ -3,13 +3,13 @@ services:
   - type: web
     name: chat-backend
     runtime: image
-    repo: https://github.com/tu-usuario/chat-distribuido
+    repo: https://github.com/GabMlopez/Distribuidas_Proyecto_Par_1
     branch: main
     plan: free
     dockerfilePath: ./Dockerfile
     envVars:
       - key: PORT
-        value: 8080
+        value: 8085
       - key: GIN_MODE
         value: release
       - key: MONGODB_URI
