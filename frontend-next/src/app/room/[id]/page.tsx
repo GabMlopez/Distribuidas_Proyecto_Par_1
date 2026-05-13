@@ -8,7 +8,7 @@ import { ChatMessage } from '@/components/room/ChatMessage';
 import { ChatSidebar } from '@/components/room/ChatSidebar';
 import { UploadToast } from '@/components/room/ProgressModal';
 
-const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
+const API = process.env.NEXT_PUBLIC_API_URL ;
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
