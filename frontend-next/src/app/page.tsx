@@ -14,15 +14,12 @@ export default function LoginPage() {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [deviceId, setDeviceId] = useState(''); 
-  
-  const API = process.env.NEXT_PUBLIC_API_URL;
 
   useEffect(() => {
-    if (userContext.deviceId) {
-      setDeviceId(userContext.deviceId);
-    }
-  }, [userContext.deviceId]);
+    setNickname(localStorage.getItem('nickname') || '');
+  }, []);
+  
+  const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,23 +46,10 @@ export default function LoginPage() {
     } else {
       if (!nickname.trim()) {
         setError('El nickname es requerido');
+        setLoading(false);
+        return;
       } else {
-        // Esperar a tener el deviceId
-        if (!deviceId) {
-          setError('Inicializando dispositivo, intenta de nuevo...');
-          setLoading(false);
-          return;
-        }
-        
-        // Usar deviceId como userId para consistencia
-        const userId = deviceId; 
-        
-        // Guardar en sessionStorage
-        sessionStorage.setItem('chat_nickname', nickname.trim());
-        sessionStorage.setItem('chat_user_id', userId);
-        sessionStorage.setItem('chat_is_admin', 'false');
-        
-        login(null, nickname.trim(), userId, false);
+        login(null, nickname.trim(), 'user_' + Math.random().toString(36).substring(2, 11),false);
         router.push('/home');
       }
     }

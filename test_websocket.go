@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"time"
 
-	"chat_distribuido/db"
+	"chat_distribuido/internal/repository"
 
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
@@ -15,21 +15,21 @@ import (
 
 func TestWS() {
 	_ = godotenv.Load()
-	db.ConnectRedis()
-	db.ConnectDB()
+	repository.ConnectRedis()
+	repository.ConnectDB()
 
 	// Esperar que main.go arranque y limpie
 	time.Sleep(3 * time.Second)
 
 	// Inyectar usuario en MongoDB para que pase la validación
-	col := db.GetCollection("usuarios")
+	col := repository.GetCollection("usuarios")
 	col.InsertOne(context.Background(), bson.M{"nickname": "PruebaUser", "sala_id": "sala1", "activo": true})
 	col.InsertOne(context.Background(), bson.M{"nickname": "PruebaUser", "sala_id": "sala2", "activo": true})
 
 	// Limpieza al final
 	defer func() {
 		col.DeleteMany(context.Background(), bson.M{"nickname": "PruebaUser"})
-		db.DisconnectDB()
+		repository.DisconnectDB()
 	}()
 
 	time.Sleep(1 * time.Second)

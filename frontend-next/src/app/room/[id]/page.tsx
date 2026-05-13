@@ -8,7 +8,7 @@ import { ChatMessage } from '@/components/room/ChatMessage';
 import { ChatSidebar } from '@/components/room/ChatSidebar';
 import { UploadToast } from '@/components/room/ProgressModal';
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = typeof window !== 'undefined' ? `http://${window.location.hostname}:8085` : process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8085';
 
 export default function RoomPage({ params }: { params: Promise<{ id: string }> }) {
   const unwrappedParams = use(params);
@@ -16,11 +16,11 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
   const { userContext } = useUser();
 
-  const [roomName, setRoomName] = useState(roomId);
-  const [roomType, setRoomType] = useState('texto');
-  const [roomToken, setRoomToken] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [roomName, setRoomName] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_name') || roomId : roomId);
+  const [roomType, setRoomType] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_type') || 'texto' : 'texto');
+  const [roomToken, setRoomToken] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('room_token') || '' : '');
 
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [messages, setMessages] = useState<MsgType[]>([]);
@@ -28,6 +28,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
   const [users, setUsers] = useState<string[]>([]);
   const [wsStatus, setWsStatus] = useState('connecting');
   const [uploads, setUploads] = useState<UploadTask[]>([]);
+  const [sessionError, setSessionError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatBodyRef = useRef<HTMLDivElement>(null);
@@ -135,6 +136,21 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
         const data = JSON.parse(e.data);
         console.log('Mensaje recibido:', data);
         
+        if (data.tipo === 'error' || data.type === 'error') {
+          setSessionError(data.texto || 'Error de sesión duplicada.');
+          websocket.close();
+          return;
+        }
+
+        if (data.tipo === 'delete_message' || data.type === 'delete_message') {
+          setMessages(prev => prev.map(m => 
+            m.file_url === data.file_url 
+              ? { ...m, file_url: undefined, texto: '🚫 Este archivo multimedia fue eliminado' } 
+              : m
+          ));
+          return;
+        }
+
         if (data.type === 'user_list' || data.tipo === 'user_list') {
           try {
             const parsed = typeof data.texto === 'string' ? JSON.parse(data.texto) : data;
@@ -299,6 +315,25 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
     await Promise.all(filesArray.map(file => uploadFile(file)));
   };
 
+  const deleteFile = async (fileUrl: string) => {
+    if (!fileUrl) return;
+    const filename = fileUrl.split('/').pop();
+    if (!filename) return;
+
+    try {
+      const res = await fetch(`${API}/upload/file/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${roomToken}` }
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Error al borrar el archivo:', res.status, errorText);
+      }
+    } catch (err) {
+      console.error('Error de red al borrar el archivo', err);
+    }
+  };
+
   const leaveRoom = async () => {
     try {
       const roomUserId = sessionStorage.getItem('room_user_id');
@@ -344,7 +379,33 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className="flex h-screen overflow-hidden relative">
-      <UploadToast uploads={uploads} onRemove={(id) => setUploads(prev => prev.filter(u => u.id !== id))} />
+      {sessionError && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-6 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-red-500/30 p-8 rounded-2xl max-w-md w-full text-center shadow-2xl">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-red-500">
+                <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2"/>
+                <line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2"/>
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Acceso Denegado</h2>
+            <p className="text-slate-400 mb-6">{sessionError}</p>
+            <button 
+              onClick={() => router.push('/home')}
+              className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-xl transition-colors font-medium w-full"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de uploads */}
+      <UploadToast 
+        uploads={uploads} 
+          onRemove={(id) => setUploads(prev => prev.filter(u => u.id !== id))}
+      />
 
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
@@ -395,6 +456,7 @@ export default function RoomPage({ params }: { params: Promise<{ id: string }> }
               isOwn={msg.nickname === (userContext.nickname || sessionStorage.getItem('chat_nickname'))} 
               formatTime={formatTime} 
               api={API} 
+              onDeleteFile={deleteFile}
             />
           ))}
         </div>

@@ -1,7 +1,8 @@
-package sockets
+package websocket
 
 import (
-	"chat_distribuido/db"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/utils"
 	"context"
 	"encoding/json"
 	"log"
@@ -32,7 +33,7 @@ func Nuevo_Hub() *Hub {
 		Registro:    make(chan *Cliente),
 		Desregistro: make(chan *Cliente),
 		Broadcast:   make(chan Mensaje),
-		RedisClient: db.GetRedisClient(),
+		RedisClient: repository.GetRedisClient(),
 		ctx:         context.Background(),
 	}
 }
@@ -51,8 +52,14 @@ func (h *Hub) Run() {
 			h.Salas[client.SalaId][client] = true
 			h.mutex.Unlock()
 
-			// Registrar en Redis la sesión activa del dispositivo (por IP) con caducidad de seguridad (24h)
-			h.RedisClient.Set(h.ctx, "device_active_session:"+client.Ip, client.Nickname+"|"+client.SalaId, 24*time.Hour)
+			// Marcar como activo en MongoDB (útil si vienen de un refresh)
+			collection := repository.GetCollection("usuarios")
+			collection.UpdateOne(h.ctx,
+				bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
+				bson.M{"$set": bson.M{"activo": true, "last_active": time.Now()}})
+
+			// Registrar en Redis la sesión activa del dispositivo (por DeviceID) con caducidad de seguridad (24h)
+			h.RedisClient.Set(h.ctx, "device_active_session:"+client.DeviceId, client.Nickname+"|"+client.SalaId, 24*time.Hour)
 			h.notifyUserList(client.SalaId)
 			// Notificar que alguien se unió
 			go func(c *Cliente) {
@@ -122,6 +129,65 @@ func (h *Hub) Run() {
 			h.notifyUserList(client.SalaId)
 
 			go func(c *Cliente) {
+				time.Sleep(5 * time.Second)
+
+				// Verificar si el usuario se reconectó durante la espera
+				h.mutex.RLock()
+				reconnected := false
+				if clients, ok := h.Salas[c.SalaId]; ok {
+					for activeClient := range clients {
+						if activeClient.DeviceId == c.DeviceId && activeClient.Nickname == c.Nickname {
+							reconnected = true
+							break
+						}
+					}
+				}
+				h.mutex.RUnlock()
+
+				if reconnected {
+					log.Printf("Cliente %s se reconectó a sala %s (refresh detectado, cancelando limpieza)", c.Nickname, c.SalaId)
+					return
+				}
+
+				// No se reconectó → limpiar sesión de verdad
+				collection := repository.GetCollection("usuarios")
+				_, err := collection.UpdateOne(h.ctx,
+					bson.M{"device_id": c.DeviceId, "nickname": c.Nickname},
+					bson.M{
+						"$set": bson.M{
+							"activo":      false,
+							"left_at":     time.Now(),
+							"last_active": time.Now(),
+						},
+					})
+				if err != nil {
+					log.Printf("Error marcando usuario %s como inactivo: %v", c.Nickname, err)
+				}
+
+				// Verificar si el DeviceID aún tiene otra conexión activa antes de borrar Redis
+				h.mutex.RLock()
+				deviceStillActive := false
+				for _, clients := range h.Salas {
+					for activeClient := range clients {
+						if activeClient.DeviceId == c.DeviceId {
+							deviceStillActive = true
+							break
+						}
+					}
+					if deviceStillActive {
+						break
+					}
+				}
+				h.mutex.RUnlock()
+
+				if !deviceStillActive {
+					h.RedisClient.Del(h.ctx, "device_active_session:"+c.DeviceId)
+				}
+
+				// Notificar usuarios actualizados
+				h.notifyUserList(c.SalaId)
+
+				// Notificar que salió
 				h.Broadcast <- Mensaje{
 					Tipo:     "leave",
 					Nickname: "Sistema",
@@ -130,26 +196,21 @@ func (h *Hub) Run() {
 				}
 			}(client)
 
-			log.Printf("Cliente %s desconectado de sala %s (esperando posible reconexión)", client.Nickname, client.SalaId)
-			h.mutex.Lock()
-			// Determinar si este dispositivo tiene otras conexiones activas
-			deviceTieneMasConexiones := false
-			if clients, ok := h.Salas[client.SalaId]; ok {
-				if _, ok := clients[client]; ok {
-					delete(clients, client)
-					close(client.Envio)
+		case message := <-h.Broadcast:
+			// Guardar en MongoDB los mensajes que representan contenido (chat o multimedia)
+			if message.Tipo == "chat" || message.Tipo == "multimedia" {
+				go func(msg Mensaje) {
+					collection := repository.GetCollection("mensajes")
+					if msg.Timestamp == 0 {
+						msg.Timestamp = time.Now().Unix()
+					}
+					
+					// Cifrar el texto antes de guardar en la DB
+					if msg.Texto != "" {
+						msg.Texto = utils.EncryptMessage(msg.Texto)
+					}
 
-					// Marcar como inactivo en MongoDB
-					collection := db.GetCollection("usuarios")
-					_, err := collection.UpdateOne(h.ctx,
-						bson.M{"device_id": client.DeviceId, "sala_id": client.SalaId},
-						bson.M{
-							"$set": bson.M{
-								"activo":      false,
-								"left_at":     time.Now(),
-								"last_active": time.Now(),
-							},
-						})
+					_, err := collection.InsertOne(context.Background(), msg)
 					if err != nil {
 						log.Printf("Error marcando usuario %s como inactivo: %v", client.Nickname, err)
 					}
@@ -240,7 +301,7 @@ func (h *Hub) listenRedis() {
 
 func (h *Hub) notifyUserList(roomID string) {
 	// Obtener lista global de usuarios de MongoDB
-	collection := db.GetCollection("usuarios")
+	collection := repository.GetCollection("usuarios")
 	cursor, err := collection.Find(h.ctx, bson.M{"sala_id": roomID, "activo": true})
 	if err != nil {
 		log.Printf("Error obteniendo usuarios de sala %s: %v", roomID, err)
@@ -291,4 +352,25 @@ func (h *Hub) GetRoomUserCount(roomID string) int {
 		return len(clients)
 	}
 	return 0
+}
+
+// IsSessionBlocked verifica si un DeviceId, Nickname o IP ya tienen una conexión
+// WebSocket activa en cualquier sala. Esto bloquea:
+// - Misma pestaña/incógnito (mismo DeviceID por Canvas Fingerprint)
+// - Diferente navegador en la misma máquina (misma IP local de red)
+// - Mismo nickname desde cualquier lugar
+// En red local, cada dispositivo físico tiene IP única (192.168.100.X),
+// así que bloquear por IP NO afecta a otros dispositivos en la misma red.
+func (h *Hub) IsSessionBlocked(deviceId string, nickname string, ip string) bool {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+
+	for _, clients := range h.Salas {
+		for client := range clients {
+			if client.DeviceId == deviceId || client.Nickname == nickname || client.Ip == ip {
+				return true
+			}
+		}
+	}
+	return false
 }

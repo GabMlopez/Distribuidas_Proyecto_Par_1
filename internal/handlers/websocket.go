@@ -1,11 +1,10 @@
-package controladores
+package handlers
 
 import (
-	"chat_distribuido/controladores/sockets"
-	"chat_distribuido/db"
+	"chat_distribuido/internal/repository"
+	internalWs "chat_distribuido/internal/websocket"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,43 +18,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func GetHistorialMensajes(c *gin.Context) {
-	salaID := c.Param("roomId")
-	if salaID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "roomId es requerido"})
-		return
-	}
-
-	// Parámetros de paginación
-	limit := int64(50)
-	offset := int64(0)
-
-	if l := c.Query("limit"); l != "" {
-		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-
-	if o := c.Query("offset"); o != "" {
-		if parsed, err := strconv.ParseInt(o, 10, 64); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
-
-	// Obtener historial
-	messages, err := db.ObtenerHistorialMensajes(salaID, limit, offset)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al obtener mensajes"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"messages": messages,
-		"total":    len(messages),
-	})
-}
-
-func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
+func HandleWebSocket(hub *internalWs.Hub, c *gin.Context) {
 	nickname := c.Query("nickname")
 	salaID := c.Param("roomId") // Obtener param de la URL en vez de query
 	if salaID == "" {
@@ -67,18 +30,9 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Nickname, roomId y device_id requeridos"})
 	}
 
-	collection := db.GetCollection("usuarios")
-
-	// Buscar usuario existente con este device_id y sala_id
-	var usuario struct {
-		Nickname string `bson:"nickname"`
-		DeviceID string `bson:"device_id"`
-		SalaID   string `bson:"sala_id"`
-		Activo   bool   `bson:"activo"`
-		Ip       string `bson:"ip"`
-	}
-
-	err := collection.FindOne(c.Request.Context(), bson.M{
+	// Validar que el usuario tenga acceso a la sala
+	collection := repository.GetCollection("usuarios")
+	count, err := collection.CountDocuments(c.Request.Context(), bson.M{
 		"sala_id":   salaID,
 		"device_id": deviceID,
 	}).Decode(&usuario)
@@ -164,12 +118,36 @@ func HandleWebSocket(hub *sockets.Hub, c *gin.Context) {
 		return
 	}
 
-	db.RedisClient.Set(c.Request.Context(), "device_active_session:"+clientIP, deviceID, 24*time.Hour)
+	clientIP := getRealIP(c) // Usar getRealIP para normalizar ::1 → 127.0.0.1
 
-	cliente := &sockets.Cliente{
+	// === CAPA DEFINITIVA: Triple validación (DeviceID + Nickname + IP) ===
+	// Bloquea: misma pestaña, incógnito, otro navegador en la misma máquina.
+	if hub.IsSessionBlocked(deviceID, nickname, clientIP) {
+		conn.WriteJSON(internalWs.Mensaje{
+			Tipo:  "error",
+			Texto: "⚠️ Conexión Rechazada: Ya existe una sesión activa desde este dispositivo. No se permiten múltiples ventanas, pestañas, modo incógnito ni otros navegadores simultáneamente.",
+		})
+		conn.Close()
+		return
+	}
+
+	// Validar que el dispositivo no tenga otra sesión activa (usando Redis)
+	activeSession, errRedis := repository.RedisClient.Get(c.Request.Context(), "device_active_session:"+deviceID).Result()
+	if errRedis == nil && activeSession != "" {
+		expectedSession := nickname + "|" + salaID
+		if activeSession != expectedSession {
+			conn.WriteJSON(internalWs.Mensaje{
+				Tipo:  "error",
+				Texto: "⚠️ Conflicto de Estado: Redis detectó que tu dispositivo ya está anclado a una sesión distinta. Cierra la pestaña anterior o presiona el botón 'Salir de la sala' antes de reconectarte.",
+			})
+			conn.Close()
+			return
+		}
+	}
+	cliente := &internalWs.Cliente{
 		Hub:      hub,
 		Conn:     conn,
-		Envio:    make(chan sockets.Mensaje, 256),
+		Envio:    make(chan internalWs.Mensaje, 256),
 		Nickname: nickname,
 		SalaId:   salaID,
 		DeviceId: deviceID,

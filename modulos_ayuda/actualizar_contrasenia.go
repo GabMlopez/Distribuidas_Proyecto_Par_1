@@ -1,9 +1,9 @@
 package main
 
 import (
-	"chat_distribuido/db"
-	"chat_distribuido/modelos"
-	"chat_distribuido/utils"
+	"chat_distribuido/internal/repository"
+	"chat_distribuido/internal/models"
+	"chat_distribuido/internal/utils"
 	"context"
 	"log"
 
@@ -19,13 +19,13 @@ func main() {
 	}
 
 	// Conectar a MongoDB
-	db.ConnectDB()
-	defer db.DisconnectDB()
+	repository.ConnectDB()
+	defer repository.DisconnectDB()
 
-	collection := db.GetCollection("administradores")
+	collection := repository.GetCollection("administradores")
 
 	// Buscar el administrador existente
-	var admin modelos.Administrador
+	var admin models.Administrador
 	err := collection.FindOne(context.Background(), bson.M{"usuario": "admin"}).Decode(&admin)
 
 	if err == mongo.ErrNoDocuments {
@@ -37,7 +37,7 @@ func main() {
 			log.Fatal("Error encriptando contraseña:", err)
 		}
 
-		newAdmin := modelos.Administrador{
+		newAdmin := models.Administrador{
 			AdministradorID: "A001",
 			Usuario:         "admin",
 			Contrasenia:     hashedPassword,
