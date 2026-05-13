@@ -87,7 +87,6 @@ func main() {
 			return
 		}
 
-		ip := c.ClientIP()
 		origin := c.Request.Header.Get("Origin")
 
 		// Permitir todos los orígenes en desarrollo
